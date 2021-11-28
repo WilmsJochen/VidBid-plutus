@@ -97,7 +97,7 @@ instance Builtin.HasDefinitions StarterContracts where
     getSchema =  \case
         MyModuleContract -> Builtin.endpointsToSchemas @MyModule.GameSchema
         VidBidMintContract -> Builtin.endpointsToSchemas @VidBidMint.VidBidMintSchema
-        VidBidContract -> Builtin.endpointsToSchemas @VidBid.GameStateMachineSchema
+        VidBidContract -> Builtin.endpointsToSchemas @VidBid.VidBIdStateMachineSchema
     getContract = \case
         MyModuleContract -> SomeBuiltin (MyModule.game @ContractError)
         VidBidMintContract -> SomeBuiltin (VidBidMint.vidBidMintContract @ContractError)

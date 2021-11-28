@@ -18,6 +18,7 @@
 
 module VidBidMint (   policy
                    , curSymbol
+                   , getTokenValue
                    , vidBidMintContract
                    , VidBidMintSchema
                    , CreateParams(..)
@@ -72,6 +73,9 @@ policy pkh = mkMintingPolicyScript $
 
 curSymbol :: PubKeyHash -> CurrencySymbol
 curSymbol pkh = scriptCurrencySymbol $ policy pkh
+
+getTokenValue :: PubKeyHash -> TokenName -> Value
+getTokenValue pkh tn = Value.singleton (curSymbol pkh) tn 1
 
 type VidBidMintSchema =
           Endpoint "mint" CreateParams
