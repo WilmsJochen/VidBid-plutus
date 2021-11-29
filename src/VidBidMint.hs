@@ -17,6 +17,7 @@
 {-# LANGUAGE RecordWildCards            #-}
 
 module VidBidMint (   policy
+                   , mint
                    , curSymbol
                    , getTokenValue
                    , vidBidMintContract
@@ -80,8 +81,8 @@ getTokenValue pkh tn = Value.singleton (curSymbol pkh) tn 1
 type VidBidMintSchema =
           Endpoint "mint" CreateParams
 
-mint :: CreateParams -> Contract w VidBidMintSchema Text ()
-mint cp = do
+mint :: (AsContractError e) => Promise () VidBidMintSchema e ()
+mint = endpoint @"mint" @CreateParams $ \(cp) -> do
     pkh         <- Contract.ownPubKeyHash
     let tn       = cpTokenName cp
         ownerPkh = cpOwnerPkh  cp
@@ -94,10 +95,8 @@ mint cp = do
     _ <- awaitTxConfirmed (getCardanoTxId ledgerTx)
     Contract.logInfo @String $ printf "forged %s" (show val)
 
-mint' :: Promise () VidBidMintSchema Text ()
-mint' = endpoint @"mint" mint
 
 
 vidBidMintContract :: AsContractError e => Contract () VidBidMintSchema Text e
 vidBidMintContract = do
-    selectList [mint'] >> vidBidMintContract
+    selectList [mint] >> vidBidMintContract

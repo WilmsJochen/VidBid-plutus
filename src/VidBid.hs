@@ -45,20 +45,22 @@ import           GHC.Generics                 (Generic)
 import           Ledger                       hiding (singleton)
 import           Ledger.Ada                   as Ada
 import           Ledger.Constraints           as Constraints
-import           Ledger.Typed.Tx
+import           Ledger.Typed.Tx              (TypedScriptTxOut (..))
 import qualified Ledger.Typed.Scripts         as Scripts
 import qualified Ledger.Value                 as V
 
 import           Plutus.Contract              as Contract
 import           Plutus.Contract.StateMachine as SM
 import qualified PlutusTx
-import qualified PlutusTx.Prelude
-import           Prelude                      (Semigroup (..), Show (..), String)
-import           PlutusTx.Prelude              hiding (pure, (<$>))
+
 import           Data.Aeson                   (FromJSON, ToJSON)
 import           GHC.Generics                 (Generic)
 import           Schema                       (ToSchema)
 import qualified Prelude
+import           Prelude                      (Semigroup (..), Show (..), String)
+import qualified PlutusTx.Prelude
+import           PlutusTx.Prelude              hiding (Semigroup(..), check, unless)
+
 import           VidBidMint
 
 newtype HashedString = HashedString BuiltinByteString deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
@@ -86,7 +88,7 @@ data VidBIdState =
     -- ^ Initial state. In this state only the 'MintTokens' action is allowed.
     | Open VidBidTokenValue
     | Bid VidBidTokenValue
-    | CLosed VidBidTokenValue
+    | Closed VidBidTokenValue
     -- ^ Funds have been locked. In this state only the 'Guess' action is
     --   allowed.
     | Destroyed
@@ -108,14 +110,23 @@ data VidBIdInput =
 PlutusTx.unstableMakeIsData ''VidBIdInput
 PlutusTx.makeLift ''VidBIdInput
 
+data VidBidOutput =
+    VidBidOutput
+        { auctionState :: Last VidBIdState
+        , auctionValue :: Last Value
+        }
+        deriving stock (Generic, Show)
+        deriving anyclass (ToJSON, FromJSON)
+
 {-# INLINABLE transition #-}
 transition :: State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
 transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
     (Initialised (VidBidTokenValue tokenVal), MintToken) ->
-        let constraints = Constraints.mustMintValue tokenVal in
+        let constraints = Constraints.mustMintValue tokenVal
+        in
         Just ( constraints
              , State
-                { stateData = Initialised (VidBidTokenValue tokenVal)
+                { stateData = Closed (VidBidTokenValue tokenVal)
                 , stateValue = oldValue
                 }
              )
@@ -160,20 +171,42 @@ init :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 init = endpoint @"init" @InitArgs $ \(InitArgs initVidId initOwnerPkh) -> do
-    let tokenVal = VidBidTokenValue (VidBidMint.getTokenValue initOwnerPkh initVidId)
+    pkh         <- Contract.ownPubKeyHash
+    let tokenVal = VidBidTokenValue (VidBidMint.getTokenValue pkh initVidId)
+        lookups  = Constraints.mintingPolicy (policy pkh)
     void $ SM.runInitialise client (Initialised tokenVal) mempty
-    void $ SM.runStep client MintToken
+    void $ SM.runStepWith lookups mempty client MintToken
 
+
+newtype LookupParams = LookupParams
+    { guessWord :: String
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
+
+lookup :: ( AsContractError e
+            , AsSMContractError e
+            ) => Promise () VidBIdStateMachineSchema e ()
+lookup = endpoint @"lookup" @LookupParams $ \(LookupParams guessWord) -> do
+  logInfo  @String "Fetching contract state "
+  maybeState <- SM.getOnChainState client
+  case maybeState of
+    Just (onChainState, _)  ->
+      do
+        let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+        logInfo @String $ "Escrow contract found in state: " ++ show valueInState
+    Nothing -> logError @String $ "Couldn't find state of contract."
 
 -- | The schema of the contract. It consists of the two endpoints @"lock"@
 --   and @"guess"@ with their respective argument types.
 type VidBIdStateMachineSchema =
         Endpoint "init" InitArgs
+        .\/ Endpoint "lookup" LookupParams
 
 contract :: ( AsContractError e
                  , AsSMContractError e
                  ) => Contract () VidBIdStateMachineSchema e ()
 contract = do
-    selectList [init] >> contract
+    selectList [init,lookup] >> contract
 
 
