@@ -992,6 +992,96 @@
 					"response": []
 				},
 				{
+					"name": "Create an instance of VidBidContract 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"VidBidContractInstance2\", jsonData.unContractInstanceId);",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"caID\": \"VidBidContract\", \n    \"caWallet\":{\n        \"getWalletId\": \"{{Wallet2}}\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/activate",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"activate"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Open",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/endpoint/open",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance2}}",
+								"endpoint",
+								"open"
+							]
+						}
+					},
+					"response": []
+				},
+				{
 					"name": "Game Instance status",
 					"event": [
 						{
