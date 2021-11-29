@@ -481,7 +481,7 @@
 							}
 						},
 						"url": {
-							"raw": "{{PAB_ENV}}/api/contract/instance/{{MintContractInstance1}}/endpoint/guess",
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{ContractInstance2}}/endpoint/guess",
 							"host": [
 								"{{PAB_ENV}}"
 							],
@@ -489,9 +489,87 @@
 								"api",
 								"contract",
 								"instance",
-								"{{MintContractInstance1}}",
+								"{{ContractInstance2}}",
 								"endpoint",
 								"guess"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 1 total funds for check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"var jsonString = JSON.stringify(jsonData)",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonString).to.include('https://www.youtube.com/watch?v=dQw4w9WgXcQ\"},0')",
+									"})",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet1}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet1}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 2 total funds for check",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"",
+									"var jsonData = pm.response.json();",
+									"var jsonString = JSON.stringify(jsonData)",
+									"pm.test('Check token has exist and has amount 1', () => {",
+									"    pm.expect(jsonString).to.include('https://www.youtube.com/watch?v=dQw4w9WgXcQ\"},1')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet2}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet2}}",
+								"total-funds"
 							]
 						}
 					},
@@ -768,6 +846,181 @@
 								"wallet",
 								"{{Wallet2}}",
 								"total-funds"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Vidbid",
+			"item": [
+				{
+					"name": "Create an instance of VidBidContract Copy",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"VidBidContractInstance1\", jsonData.unContractInstanceId);",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"caID\": \"VidBidContract\", \n    \"caWallet\":{\n        \"getWalletId\": \"{{Wallet1}}\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/activate",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"activate"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "init",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"initVidId\": {\n        \"unTokenName\": \"https://www.youtube.com/watch?v=dQw4w9Wqqw\"\n    },\n    \"initOwnerPkh\": {\n        \"getPubKeyHash\": \"{{PubKeyHash2}}\"\n    } \n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/init",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance1}}",
+								"endpoint",
+								"init"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/lookup",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance1}}",
+								"endpoint",
+								"lookup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Game Instance status",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/status",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance1}}",
+								"status"
 							]
 						}
 					},

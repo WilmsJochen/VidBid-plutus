@@ -73,6 +73,9 @@ PlutusTx.makeLift ''ClearString
 newtype VidBidTokenValue = VidBidTokenValue Value deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''VidBidTokenValue
 
+newtype VidOwner = VidOwner PubKeyHash deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
+PlutusTx.makeLift ''VidOwner
+
 hashString :: String -> HashedString
 hashString = HashedString . sha2_256 . toBuiltin . C.pack
 
@@ -86,8 +89,8 @@ clearString = ClearString . toBuiltin . C.pack
 data VidBIdState =
     Initialised VidBidTokenValue
     -- ^ Initial state. In this state only the 'MintTokens' action is allowed.
-    | Open VidBidTokenValue
-    | Bid VidBidTokenValue
+    | Opened VidBidTokenValue VidOwner
+    | Bided VidBidTokenValue VidOwner
     | Closed VidBidTokenValue
     -- ^ Funds have been locked. In this state only the 'Guess' action is
     --   allowed.
@@ -102,9 +105,11 @@ PlutusTx.makeLift ''VidBIdState
 -- | Inputs (actions)
 data VidBIdInput =
     MintToken
-    | Lock HashedString
-    -- ^ Make a guess, extract the funds, and lock the remaining funds using a
-    --   new secret word.
+    | Open
+    | Bid
+    | PayDay
+    | Grab
+    | Destroy
     deriving stock (Prelude.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 PlutusTx.unstableMakeIsData ''VidBIdInput
@@ -178,30 +183,24 @@ init = endpoint @"init" @InitArgs $ \(InitArgs initVidId initOwnerPkh) -> do
     void $ SM.runStepWith lookups mempty client MintToken
 
 
-newtype LookupParams = LookupParams
-    { guessWord :: String
-    }
-    deriving stock ( Show, Generic)
-    deriving anyclass (FromJSON, ToJSON, ToSchema)
-
 lookup :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-lookup = endpoint @"lookup" @LookupParams $ \(LookupParams guessWord) -> do
+lookup = endpoint @"lookup" $ \() -> do
   logInfo  @String "Fetching contract state "
   maybeState <- SM.getOnChainState client
   case maybeState of
     Just (onChainState, _)  ->
       do
         let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
-        logInfo @String $ "Escrow contract found in state: " ++ show valueInState
+        logInfo @String $ "VidBid contract found in state: " ++ show valueInState
     Nothing -> logError @String $ "Couldn't find state of contract."
 
 -- | The schema of the contract. It consists of the two endpoints @"lock"@
 --   and @"guess"@ with their respective argument types.
 type VidBIdStateMachineSchema =
         Endpoint "init" InitArgs
-        .\/ Endpoint "lookup" LookupParams
+        .\/ Endpoint "lookup" ()
 
 contract :: ( AsContractError e
                  , AsSMContractError e
