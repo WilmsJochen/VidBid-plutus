@@ -73,6 +73,9 @@ PlutusTx.makeLift ''ClearString
 newtype VidBidTokenValue = VidBidTokenValue Value deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''VidBidTokenValue
 
+newtype BidValue = BidValue Value deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
+PlutusTx.makeLift ''BidValue
+
 newtype VidOwnerPkh = VidOwnerPkh PubKeyHash deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''VidOwnerPkh
 
@@ -89,8 +92,8 @@ clearString = ClearString . toBuiltin . C.pack
 data VidBIdState =
     Initialised VidBidTokenValue
     -- ^ Initial state. In this state only the 'MintTokens' action is allowed.
-    | Opened VidBidTokenValue VidOwnerPkh
-    | Bided VidBidTokenValue VidOwnerPkh
+    | Opened VidBidTokenValue VidOwnerPkh BidValue
+    | Offered VidBidTokenValue VidOwnerPkh BidValue
     | Closed VidBidTokenValue
     -- ^ Funds have been locked. In this state only the 'Guess' action is
     --   allowed.
@@ -105,8 +108,8 @@ PlutusTx.makeLift ''VidBIdState
 -- | Inputs (actions)
 data VidBIdInput =
     MintToken VidOwnerPkh
-    | Open VidOwnerPkh
-    | Bid
+    | Open VidOwnerPkh BidValue
+    | Bid VidOwnerPkh BidValue
     | PayDay
     | Grab
     | Destroy
@@ -115,13 +118,6 @@ data VidBIdInput =
 PlutusTx.unstableMakeIsData ''VidBIdInput
 PlutusTx.makeLift ''VidBIdInput
 
-data VidBidOutput =
-    VidBidOutput
-        { auctionState :: Last VidBIdState
-        , auctionValue :: Last Value
-        }
-        deriving stock (Generic, Show)
-        deriving anyclass (ToJSON, FromJSON)
 
 {-# INLINABLE transition #-}
 transition :: State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
@@ -136,18 +132,24 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                 , stateValue = oldValue
                 }
              )
-    (Closed (VidBidTokenValue tokenVal), Open ownerPkh) ->
+    (Closed (VidBidTokenValue tokenVal), Open ownerPkh bidValue) ->
         let constraints = mempty
         in
         Just ( constraints
              , State
-                { stateData = Opened (VidBidTokenValue tokenVal) ownerPkh
+                { stateData = Opened (VidBidTokenValue tokenVal) ownerPkh bidValue
                 , stateValue = oldValue + tokenVal
                 }
              )
-
-checkGuess :: HashedString -> ClearString -> Bool
-checkGuess (HashedString actual) (ClearString guess') = actual == sha2_256 guess'
+    (Opened (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue)) ->
+        let constraints = mempty
+        in
+        Just ( constraints
+             , State
+                { stateData = Offered (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
+                , stateValue = oldValue + bidValue
+                }
+             )
 
 
 type VidBIdStateMachine = SM.StateMachine VidBIdState VidBIdInput
@@ -199,7 +201,20 @@ open :: ( AsContractError e
 open = endpoint @"open" $ \() -> do
     pkh         <- Contract.ownPubKeyHash
     let ownerPkh  = VidOwnerPkh pkh
-    void $ SM.runStep client (Open ownerPkh)
+        minPrice = 1 :: Integer
+        minValue = BidValue (Ada.lovelaceValueOf minPrice)
+    void $ SM.runStep client (Open ownerPkh minValue)
+
+
+bid :: ( AsContractError e
+            , AsSMContractError e
+            ) => Promise () VidBIdStateMachineSchema e ()
+bid = endpoint @"bid" $ \() -> do
+    pkh         <- Contract.ownPubKeyHash
+    let ownerPkh  = VidOwnerPkh pkh
+        minPrice = 4 :: Integer
+        bidValue = BidValue (Ada.lovelaceValueOf minPrice)
+    void $ SM.runStep client (Bid ownerPkh bidValue)
 
 
 lookup :: ( AsContractError e
@@ -221,11 +236,12 @@ type VidBIdStateMachineSchema =
         Endpoint "init" InitArgs
         .\/ Endpoint "lookup" ()
         .\/ Endpoint "open" ()
+        .\/ Endpoint "bid" ()
 
 contract :: ( AsContractError e
                  , AsSMContractError e
                  ) => Contract () VidBIdStateMachineSchema e ()
 contract = do
-    selectList [init, lookup, open] >> contract
+    selectList [init, lookup, open, bid] >> contract
 
 
