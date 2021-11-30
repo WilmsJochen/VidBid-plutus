@@ -141,7 +141,18 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                 , stateValue = oldValue + tokenVal
                 }
              )
-    (Opened (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue)) ->
+    (Opened (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
+     | isValidBidValue currentValue bidValue ->
+        let constraints = mempty
+        in
+        Just ( constraints
+             , State
+                { stateData = Offered (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
+                , stateValue = oldValue + bidValue
+                }
+             )
+    (Offered (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
+     | isValidBidValue currentValue bidValue ->
         let constraints = mempty
         in
         Just ( constraints
@@ -151,6 +162,12 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                 }
              )
 
+
+{-# INLINABLE isValidBidValue #-}
+-- | Check whether a proposed 'Payment' is valid given the total
+--   amount of funds currently locked in the contract.
+isValidBidValue :: Value -> Value -> Bool
+isValidBidValue old new = Ada.fromValue old < Ada.fromValue new
 
 type VidBIdStateMachine = SM.StateMachine VidBIdState VidBIdInput
 
@@ -195,25 +212,34 @@ init = endpoint @"init" @InitArgs $ \(InitArgs initVidId initOwnerPkh) -> do
     void $ SM.runInitialise client (Initialised tokenVal) mempty
     void $ SM.runStepWith lookups mempty client (MintToken ownerPkh)
 
+data OpenArgs = OpenArgs
+    { minPrice  :: Integer
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 open :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-open = endpoint @"open" $ \() -> do
+open = endpoint @"open" @OpenArgs $ \(OpenArgs minPrice) -> do
     pkh         <- Contract.ownPubKeyHash
     let ownerPkh  = VidOwnerPkh pkh
-        minPrice = 1 :: Integer
         minValue = BidValue (Ada.lovelaceValueOf minPrice)
     void $ SM.runStep client (Open ownerPkh minValue)
 
+data BidArgs = BidArgs
+    { bidPrice  :: Integer
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
 
 bid :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-bid = endpoint @"bid" $ \() -> do
+bid = endpoint @"bid" @BidArgs $ \(BidArgs bidPrice) -> do
     pkh         <- Contract.ownPubKeyHash
     let ownerPkh  = VidOwnerPkh pkh
-        minPrice = 4 :: Integer
-        bidValue = BidValue (Ada.lovelaceValueOf minPrice)
+        bidValue = BidValue (Ada.lovelaceValueOf bidPrice)
     void $ SM.runStep client (Bid ownerPkh bidValue)
 
 
@@ -235,8 +261,8 @@ lookup = endpoint @"lookup" $ \() -> do
 type VidBIdStateMachineSchema =
         Endpoint "init" InitArgs
         .\/ Endpoint "lookup" ()
-        .\/ Endpoint "open" ()
-        .\/ Endpoint "bid" ()
+        .\/ Endpoint "open" OpenArgs
+        .\/ Endpoint "bid" BidArgs
 
 contract :: ( AsContractError e
                  , AsSMContractError e
