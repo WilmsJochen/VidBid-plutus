@@ -79,6 +79,9 @@ PlutusTx.makeLift ''BidValue
 newtype VidOwnerPkh = VidOwnerPkh PubKeyHash deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''VidOwnerPkh
 
+newtype PlatformPkh = PlatformPkh PubKeyHash deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
+PlutusTx.makeLift ''PlatformPkh
+
 hashString :: String -> HashedString
 hashString = HashedString . sha2_256 . toBuiltin . C.pack
 
@@ -90,11 +93,11 @@ clearString = ClearString . toBuiltin . C.pack
 -- | State of the guessing vidBId
 -- | State of the guessing vidBId
 data VidBIdState =
-    Initialised VidBidTokenValue
+    Initialised PlatformPkh VidBidTokenValue
     -- ^ Initial state. In this state only the 'MintTokens' action is allowed.
-    | Opened VidBidTokenValue VidOwnerPkh BidValue
-    | Offered VidBidTokenValue VidOwnerPkh BidValue
-    | Closed VidBidTokenValue
+    | Opened PlatformPkh VidBidTokenValue VidOwnerPkh BidValue
+    | Offered PlatformPkh VidBidTokenValue VidOwnerPkh BidValue
+    | Closed PlatformPkh VidBidTokenValue
     -- ^ Funds have been locked. In this state only the 'Guess' action is
     --   allowed.
     | Destroyed
@@ -110,7 +113,7 @@ data VidBIdInput =
     MintToken VidOwnerPkh
     | Open VidOwnerPkh BidValue
     | Bid VidOwnerPkh BidValue
-    | PayDay
+    | PayDay Value
     | Grab
     | Destroy
     deriving stock (Prelude.Show, Generic)
@@ -122,45 +125,68 @@ PlutusTx.makeLift ''VidBIdInput
 {-# INLINABLE transition #-}
 transition :: State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
 transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
-    (Initialised (VidBidTokenValue tokenVal), MintToken (VidOwnerPkh ownerPkh)) ->
+    (Initialised platformPkh (VidBidTokenValue tokenVal), MintToken (VidOwnerPkh ownerPkh)) ->
         let constraints = Constraints.mustMintValue tokenVal <>
                           Constraints.mustPayToPubKey ownerPkh tokenVal
         in
         Just ( constraints
              , State
-                { stateData = Closed (VidBidTokenValue tokenVal)
+                { stateData = Closed platformPkh (VidBidTokenValue tokenVal)
                 , stateValue = oldValue
                 }
              )
-    (Closed (VidBidTokenValue tokenVal), Open ownerPkh bidValue) ->
-        let constraints = mempty
+    (Closed platformPkh (VidBidTokenValue tokenVal), Open (VidOwnerPkh ownerPkh) bidValue) ->
+        let constraints = Constraints.mustPayToPubKey ownerPkh tokenVal
         in
         Just ( constraints
              , State
-                { stateData = Opened (VidBidTokenValue tokenVal) ownerPkh bidValue
-                , stateValue = oldValue + tokenVal
+                { stateData = Opened platformPkh (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh) bidValue
+                , stateValue = tokenVal
                 }
              )
-    (Opened (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
+    (Opened platformPkh (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
      | isValidBidValue currentValue bidValue ->
         let constraints = mempty
         in
         Just ( constraints
              , State
-                { stateData = Offered (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
+                { stateData = Offered platformPkh (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
                 , stateValue = oldValue + bidValue
                 }
              )
-    (Offered (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
+    (Opened (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , PayDay value)
+     | scriptContainsToken oldValue tokenVal ->
+        let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
+                          Constraints.mustBeSignedBy platformPkh
+        in
+        Just ( constraints
+             , State
+                { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
+                , stateValue = value
+                }
+             )
+    (Offered platformPkh (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
      | isValidBidValue currentValue bidValue ->
         let constraints = Constraints.mustPayToPubKey currentOwnerPkh currentValue
         in
         Just ( constraints
              , State
-                { stateData = Offered (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
+                { stateData = Offered platformPkh (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
                 , stateValue = tokenVal + bidValue
                 }
              )
+    (Offered (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , PayDay value)
+     | scriptContainsToken oldValue tokenVal ->
+        let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
+                          Constraints.mustBeSignedBy platformPkh
+        in
+        Just ( constraints
+             , State
+                { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
+                , stateValue = value
+                }
+             )
+    _ -> Nothing
 
 
 {-# INLINABLE isValidBidValue #-}
@@ -168,6 +194,12 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
 --   amount of funds currently locked in the contract.
 isValidBidValue :: Value -> Value -> Bool
 isValidBidValue old new = Ada.fromValue old < Ada.fromValue new
+
+{-# INLINABLE scriptContainsToken #-}
+-- | Check whether a proposed 'Payment' is valid given the total
+--   amount of funds currently locked in the contract.
+scriptContainsToken :: Value -> Value -> Bool
+scriptContainsToken old token = V.geq old token
 
 type VidBIdStateMachine = SM.StateMachine VidBIdState VidBIdInput
 
@@ -208,8 +240,9 @@ init = endpoint @"init" @InitArgs $ \(InitArgs initVidId initOwnerPkh) -> do
     pkh         <- Contract.ownPubKeyHash
     let tokenVal = VidBidTokenValue (VidBidMint.getTokenValue pkh initVidId)
         ownerPkh = VidOwnerPkh initOwnerPkh
+        platformPkh = PlatformPkh pkh
         lookups  = Constraints.mintingPolicy (policy pkh)
-    void $ SM.runInitialise client (Initialised tokenVal) mempty
+    void $ SM.runInitialise client (Initialised platformPkh tokenVal) mempty
     void $ SM.runStepWith lookups mempty client (MintToken ownerPkh)
 
 data OpenArgs = OpenArgs
