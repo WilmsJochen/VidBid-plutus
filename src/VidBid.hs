@@ -151,14 +151,14 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                 , stateValue = oldValue + bidValue
                 }
              )
-    (Offered (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
+    (Offered (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
      | isValidBidValue currentValue bidValue ->
-        let constraints = mempty
+        let constraints = Constraints.mustPayToPubKey currentOwnerPkh currentValue
         in
         Just ( constraints
              , State
                 { stateData = Offered (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
-                , stateValue = oldValue + bidValue
+                , stateValue = tokenVal + bidValue
                 }
              )
 
