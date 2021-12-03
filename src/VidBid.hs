@@ -65,12 +65,8 @@ import           PlutusTx.Prelude              hiding (Semigroup(..), check, unl
 
 import           VidBidMint
 
-newtype HashedString = HashedString BuiltinByteString deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
-
-PlutusTx.makeLift ''HashedString
-
-newtype ClearString = ClearString BuiltinByteString deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
-PlutusTx.makeLift ''ClearString
+newtype VidId = VidId BuiltinByteString deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
+PlutusTx.makeLift ''VidId
 
 newtype VidBidTokenValue = VidBidTokenValue Value deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''VidBidTokenValue
@@ -84,6 +80,11 @@ PlutusTx.makeLift ''VidOwnerPkh
 newtype PlatformPkh = PlatformPkh PubKeyHash deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''PlatformPkh
 
+-- create a redeemer script for the guessing VidBId by lifting the
+-- string to its on-chain representation
+vidIdFromString :: String -> VidId
+vidIdFromString = VidId . toBuiltin . C.pack
+
 data HighestBid =
     HighestBid
         { highestBid    :: Value
@@ -95,13 +96,6 @@ data HighestBid =
 PlutusTx.unstableMakeIsData ''HighestBid
 PlutusTx.makeLift ''HighestBid
 
-hashString :: String -> HashedString
-hashString = HashedString . sha2_256 . toBuiltin . C.pack
-
--- create a redeemer script for the guessing VidBId by lifting the
--- string to its on-chain representation
-clearString :: String -> ClearString
-clearString = ClearString . toBuiltin . C.pack
 
 -- | State of the guessing vidBId
 -- | State of the guessing vidBId
@@ -137,8 +131,8 @@ PlutusTx.makeLift ''VidBIdInput
 
 
 {-# INLINABLE transition #-}
-transition :: State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
-transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
+transition :: VidId -> State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
+transition vidId State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
 --  MintToken
     (Initialised (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh), MintToken ) ->
         let constraints = Constraints.mustMintValue tokenVal <>
@@ -287,27 +281,24 @@ scriptContainsToken old token = V.geq old token
 type VidBIdStateMachine = SM.StateMachine VidBIdState VidBIdInput
 
 {-# INLINABLE machine #-}
-machine :: StateMachine VidBIdState VidBIdInput
-machine = SM.mkStateMachine Nothing transition isFinal where
+machine :: VidId ->  StateMachine VidBIdState VidBIdInput
+machine vidId = SM.mkStateMachine Nothing (transition vidId) isFinal where
     isFinal Destroyed = True
     isFinal _         = False
 
 {-# INLINABLE mkVidBidValidator #-}
-mkVidBidValidator :: Scripts.ValidatorType VidBIdStateMachine
-mkVidBidValidator = SM.mkValidator machine
+mkVidBidValidator :: VidId -> Scripts.ValidatorType VidBIdStateMachine
+mkVidBidValidator vidId = SM.mkValidator (machine vidId)
 
-typedVidbidValidator :: Scripts.TypedValidator VidBIdStateMachine
-typedVidbidValidator = Scripts.mkTypedValidator @VidBIdStateMachine
+typedVidbidValidator :: VidId -> Scripts.TypedValidator VidBIdStateMachine
+typedVidbidValidator = Scripts.mkTypedValidatorParam @VidBIdStateMachine
     $$(PlutusTx.compile [|| mkVidBidValidator ||])
     $$(PlutusTx.compile [|| wrap ||])
     where
         wrap = Scripts.wrapValidator
 
-mintingPolicy :: Scripts.MintingPolicy
-mintingPolicy = Scripts.forwardingMintingPolicy typedVidbidValidator
-
-client :: SM.StateMachineClient VidBIdState VidBIdInput
-client = SM.mkStateMachineClient $ SM.StateMachineInstance machine typedVidbidValidator
+client :: VidId -> SM.StateMachineClient VidBIdState VidBIdInput
+client vidId = SM.mkStateMachineClient $ SM.StateMachineInstance (machine vidId) (typedVidbidValidator vidId)
 
 data InitArgs = InitArgs
     { vidId            :: String
@@ -320,7 +311,7 @@ init :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhStr) -> do
-    logInfo  @String "Initialised"
+    logInfo  @String $ "Initialise with vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
     let initVidId          = V.TokenName (toBuiltin (C.pack vidId))
         platformPubKeyHash = PubKeyHash (toBuiltin (C.pack platformPkhStr))
@@ -328,8 +319,8 @@ init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhStr) -> do
         ownerPkh           = VidOwnerPkh pkh
         platformPkh        = PlatformPkh platformPubKeyHash
 
-    logInfo @String $ "Platorm pkh: " ++ show platformPkhStr
-    void $ SM.runInitialise client (Initialised platformPkh tokenVal ownerPkh) mempty
+    logInfo @String $ "Platorm pkh: " ++ platformPkhStr
+    void $ SM.runInitialise (client (vidIdFromString vidId)) (Initialised platformPkh tokenVal ownerPkh) mempty
 
 
 data MintArgs = MintArgs
@@ -342,11 +333,11 @@ mintToken :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 mintToken = endpoint @"mint" @MintArgs $ \(MintArgs vidId) -> do
-    logInfo  @String "Token minted."
+    logInfo  @String $ "Mint token for vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
     let lookups = Constraints.mintingPolicy (policy pkh)
     logInfo @String $ "Platorm pkh: " ++ show pkh
-    void $ SM.runStepWith lookups mempty client (MintToken)
+    void $ SM.runStepWith lookups mempty (client (vidIdFromString vidId)) (MintToken)
 
 data OpenArgs = OpenArgs
     { vidId     :: String
@@ -359,10 +350,10 @@ open :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 open = endpoint @"open" @OpenArgs $ \(OpenArgs vidId minPrice) -> do
-    logInfo  @String "Auction opened."
+    logInfo  @String $ "Open auction for vidId: " ++  vidId
     pkh         <- Contract.ownPubKeyHash
     let minValue = Ada.lovelaceValueOf minPrice
-    void $ SM.runStep client Open{ownerPkh = pkh, minBidValue = minValue}
+    void $ SM.runStep (client (vidIdFromString vidId)) Open{ownerPkh = pkh, minBidValue = minValue}
 
 data BidArgs = BidArgs
     { vidId     :: String
@@ -375,10 +366,10 @@ bid :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 bid = endpoint @"bid" @BidArgs $ \(BidArgs vidId bidPrice) -> do
-    logInfo  @String "Bid Received."
+    logInfo  @String $ "Bid on vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
     let bidValue = Ada.lovelaceValueOf bidPrice
-    void $ SM.runStep client  Bid{newBid = bidValue, newBidder = pkh}
+    void $ SM.runStep (client (vidIdFromString vidId))  Bid{newBid = bidValue, newBidder = pkh}
 
 data PaydayArgs = PaydayArgs
     { vidId     :: String
@@ -391,9 +382,9 @@ payday :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 payday = endpoint @"payday" @PaydayArgs $ \(PaydayArgs vidId adaValue) -> do
-    logInfo  @String "PayDay!!!"
+    logInfo  @String $ "PayDay!!! for vidId: " ++ vidId
     let paydayValue = Ada.lovelaceValueOf adaValue
-    void $ SM.runStep client Payday{paydayValue = paydayValue}
+    void $ SM.runStep (client (vidIdFromString vidId)) Payday{paydayValue = paydayValue}
 
 
 data GrabArgs = GrabArgs
@@ -406,9 +397,9 @@ grab :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 grab = endpoint @"grab" @GrabArgs $ \(GrabArgs vidId) -> do
-    logInfo  @String "Grabbing fees."
+    logInfo  @String $ "Grabbing fees of vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
-    void $ SM.runStep client Grab{ownerPkh = pkh}
+    void $ SM.runStep (client (vidIdFromString vidId)) Grab{ownerPkh = pkh}
 
 
 data DestroyArgs = DestroyArgs
@@ -421,8 +412,8 @@ destroy :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 destroy = endpoint @"destroy" @DestroyArgs $ \(DestroyArgs vidId) -> do
-    logInfo  @String "Destroy contract instance"
-    void $ SM.runStep client Destroy
+    logInfo  @String $ "Destroy instance for vidId: " ++ vidId
+    void $ SM.runStep (client (vidIdFromString vidId)) Destroy
 
 
 data LookupArgs = LookupArgs
@@ -435,8 +426,8 @@ lookup :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 lookup = endpoint @"lookup" @LookupArgs $ \(LookupArgs vidId) -> do
-  logInfo  @String "Fetching contract state "
-  maybeState <- SM.getOnChainState client
+  logInfo  @String $ "Fetching contract state for vidId: " ++ vidId
+  maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
   case maybeState of
     Just (onChainState, _)  ->
       do
