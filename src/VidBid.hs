@@ -126,7 +126,8 @@ data VidBIdInput =
     MintToken
     | Open {ownerPkh :: PubKeyHash, minBidValue :: Value}
     | Bid { newBid :: Value, newBidder :: PubKeyHash }
-    | Payday { value :: Value}
+    | Payday {paydayValue :: Value}
+    | Grab {ownerPkh :: PubKeyHash}
     | Destroy
     deriving stock (Prelude.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -151,7 +152,7 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
              )
 --    OPEN
     (Closed platformPkh (VidBidTokenValue tokenVal), Open{ownerPkh, minBidValue}) ->
-        let constraints = mempty
+        let constraints = Constraints.mustPayToPubKey ownerPkh oldValue
         in
         Just ( constraints
              , State
@@ -180,30 +181,53 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                 , stateValue = tokenVal + newBid
                 }
              )
-----   PAYDAY
---   (Opened (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (MinimalBidValue currentValue) , Payday value)
---    | scriptContainsToken oldValue tokenVal ->
---       let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
---                         Constraints.mustBeSignedBy platformPkh
---       in
---       Just ( constraints
---            , State
---               { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
---               , stateValue = value
---               }
---            )
---    (Offered (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , Payday value)
---    | scriptContainsToken oldValue tokenVal ->
---        let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
---                          Constraints.mustBeSignedBy platformPkh
---        in
---        Just ( constraints
---             , State
---                { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
---                , stateValue = value
---                }
---             )
---    _ -> Nothing
+--     PAYDAY
+    (Opened (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh) _ , Payday{paydayValue})
+     | scriptContainsToken oldValue tokenVal ->
+        let constraints = Constraints.mustPayToPubKey ownerPkh tokenVal <>
+                          Constraints.mustBeSignedBy platformPkh
+        in
+          Just ( constraints
+             , State
+                { stateData = Closed (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
+                , stateValue = paydayValue
+                }
+             )
+    (Offered (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (HighestBid bidValue bidderPkh) , Payday{paydayValue} )
+     | scriptContainsToken oldValue tokenVal ->
+        let constraints = Constraints.mustPayToPubKey currentOwnerPkh bidValue <>
+                          Constraints.mustPayToPubKey bidderPkh tokenVal <>
+                          Constraints.mustBeSignedBy platformPkh
+        in
+          Just ( constraints
+               , State
+                  { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
+                  , stateValue = paydayValue
+                  }
+               )
+    (Closed platformPkh (VidBidTokenValue tokenVal), Payday{paydayValue} )
+     | scriptContainsToken oldValue tokenVal ->
+        let constraints = mempty
+        in
+          Just ( constraints
+               , State
+                  { stateData = Closed platformPkh (VidBidTokenValue tokenVal)
+                  , stateValue = paydayValue
+                  }
+               )
+--    Grab
+    (Closed platformPkh (VidBidTokenValue tokenVal), Grab{ownerPkh} )
+     | scriptContainsToken oldValue tokenVal ->
+        let constraints = Constraints.mustSpendAtLeast tokenVal <>
+                          Constraints.mustPayToPubKey ownerPkh oldValue
+        in
+          Just ( constraints
+               , State
+                  { stateData = Closed platformPkh (VidBidTokenValue tokenVal)
+                  , stateValue = Ada.lovelaceValueOf 0
+                  }
+               )
+    _ -> Nothing
 
 
 {-# INLINABLE isValidBidValue #-}
@@ -310,9 +334,16 @@ payday :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 payday = endpoint @"payday" @PaydayArgs $ \(PaydayArgs adaValue) -> do
+    let paydayValue = Ada.lovelaceValueOf adaValue
+    void $ SM.runStep client Payday{paydayValue = paydayValue}
+
+
+grab :: ( AsContractError e
+            , AsSMContractError e
+            ) => Promise () VidBIdStateMachineSchema e ()
+grab = endpoint @"grab" $ \() -> do
     pkh         <- Contract.ownPubKeyHash
-    let value = Ada.lovelaceValueOf adaValue
-    void $ SM.runStep client (Payday value)
+    void $ SM.runStep client Grab{ownerPkh = pkh}
 
 
 lookup :: ( AsContractError e
@@ -337,11 +368,12 @@ type VidBIdStateMachineSchema =
         .\/ Endpoint "open" OpenArgs
         .\/ Endpoint "bid" BidArgs
         .\/ Endpoint "payday" PaydayArgs
+        .\/ Endpoint "grab" ()
 
 contract :: ( AsContractError e
                  , AsSMContractError e
                  ) => Contract () VidBIdStateMachineSchema e ()
 contract = do
-    selectList [init, mintToken, lookup, open, bid, payday] >> contract
+    selectList [init, mintToken, lookup, open, bid, payday, grab] >> contract
 
 
