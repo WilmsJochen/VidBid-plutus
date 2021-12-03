@@ -124,10 +124,9 @@ PlutusTx.makeLift ''VidBIdState
 -- | Inputs (actions)
 data VidBIdInput =
     MintToken
-    | Open VidOwnerPkh MinimalBidValue
+    | Open {ownerPkh :: PubKeyHash, minBidValue :: Value}
     | Bid { newBid :: Value, newBidder :: PubKeyHash }
-    | Payday Value
-    | Grab
+    | Payday { value :: Value}
     | Destroy
     deriving stock (Prelude.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
@@ -151,12 +150,12 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                 }
              )
 --    OPEN
-    (Closed platformPkh (VidBidTokenValue tokenVal), Open (VidOwnerPkh ownerPkh) minBidValue) ->
+    (Closed platformPkh (VidBidTokenValue tokenVal), Open{ownerPkh, minBidValue}) ->
         let constraints = mempty
         in
         Just ( constraints
              , State
-                { stateData = Opened platformPkh (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh) minBidValue
+                { stateData = Opened platformPkh (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh) (MinimalBidValue minBidValue)
                 , stateValue = tokenVal
                 }
              )
@@ -283,9 +282,8 @@ open :: ( AsContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 open = endpoint @"open" @OpenArgs $ \(OpenArgs minPrice) -> do
     pkh         <- Contract.ownPubKeyHash
-    let ownerPkh  = VidOwnerPkh pkh
-        minValue = MinimalBidValue (Ada.lovelaceValueOf minPrice)
-    void $ SM.runStep client (Open ownerPkh minValue)
+    let minValue = Ada.lovelaceValueOf minPrice
+    void $ SM.runStep client Open{ownerPkh = pkh, minBidValue = minValue}
 
 data BidArgs = BidArgs
     { bidPrice  :: Integer
