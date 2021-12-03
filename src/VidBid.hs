@@ -132,7 +132,7 @@ PlutusTx.makeLift ''VidBIdInput
 
 {-# INLINABLE transition #-}
 transition :: VidId -> State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
-transition vidId State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
+transition _ State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
 --  MintToken
     (Initialised (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh), MintToken ) ->
         let constraints = Constraints.mustMintValue tokenVal <>
@@ -302,7 +302,7 @@ client vidId = SM.mkStateMachineClient $ SM.StateMachineInstance (machine vidId)
 
 data InitArgs = InitArgs
     { vidId            :: String
-    , platformPkhStr   :: String
+    , platformPkhStr   :: PubKeyHash
     }
     deriving stock ( Show, Generic)
     deriving anyclass (FromJSON, ToJSON, ToSchema)
@@ -310,16 +310,13 @@ data InitArgs = InitArgs
 init :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhStr) -> do
+init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhParam) -> do
     logInfo  @String $ "Initialise with vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
     let initVidId          = V.TokenName (toBuiltin (C.pack vidId))
-        platformPubKeyHash = PubKeyHash (toBuiltin (C.pack platformPkhStr))
-        tokenVal           = VidBidTokenValue (VidBidMint.getTokenValue platformPubKeyHash initVidId)
+        tokenVal           = VidBidTokenValue (VidBidMint.getTokenValue platformPkhParam initVidId)
         ownerPkh           = VidOwnerPkh pkh
-        platformPkh        = PlatformPkh platformPubKeyHash
-
-    logInfo @String $ "Platorm pkh: " ++ platformPkhStr
+        platformPkh        = PlatformPkh platformPkhParam
     void $ SM.runInitialise (client (vidIdFromString vidId)) (Initialised platformPkh tokenVal ownerPkh) mempty
 
 
@@ -335,9 +332,10 @@ mintToken :: ( AsContractError e
 mintToken = endpoint @"mint" @MintArgs $ \(MintArgs vidId) -> do
     logInfo  @String $ "Mint token for vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
-    let lookups = Constraints.mintingPolicy (policy pkh)
+    let lookups   = Constraints.mintingPolicy (policy pkh)
+        theClient =  client (vidIdFromString vidId)
     logInfo @String $ "Platorm pkh: " ++ show pkh
-    void $ SM.runStepWith lookups mempty (client (vidIdFromString vidId)) (MintToken)
+    void $ SM.runStepWith lookups mempty theClient (MintToken)
 
 data OpenArgs = OpenArgs
     { vidId     :: String
