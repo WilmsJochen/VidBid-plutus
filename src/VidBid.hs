@@ -29,6 +29,7 @@
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE ViewPatterns               #-}
 {-# LANGUAGE NamedFieldPuns             #-}
+{-# LANGUAGE DuplicateRecordFields      #-}
 
 module VidBid
     (
@@ -330,10 +331,17 @@ init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhStr) -> do
     logInfo @String $ "Platorm pkh: " ++ show platformPkhStr
     void $ SM.runInitialise client (Initialised platformPkh tokenVal ownerPkh) mempty
 
+
+data MintArgs = MintArgs
+    { vidId            :: String
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 mintToken :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-mintToken = endpoint @"mint" $ \() -> do
+mintToken = endpoint @"mint" @MintArgs $ \(MintArgs vidId) -> do
     logInfo  @String "Token minted."
     pkh         <- Contract.ownPubKeyHash
     let lookups = Constraints.mintingPolicy (policy pkh)
@@ -341,7 +349,8 @@ mintToken = endpoint @"mint" $ \() -> do
     void $ SM.runStepWith lookups mempty client (MintToken)
 
 data OpenArgs = OpenArgs
-    { minPrice  :: Integer
+    { vidId     :: String
+    , minPrice  :: Integer
     }
     deriving stock ( Show, Generic)
     deriving anyclass (FromJSON, ToJSON, ToSchema)
@@ -349,14 +358,15 @@ data OpenArgs = OpenArgs
 open :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-open = endpoint @"open" @OpenArgs $ \(OpenArgs minPrice) -> do
+open = endpoint @"open" @OpenArgs $ \(OpenArgs vidId minPrice) -> do
     logInfo  @String "Auction opened."
     pkh         <- Contract.ownPubKeyHash
     let minValue = Ada.lovelaceValueOf minPrice
     void $ SM.runStep client Open{ownerPkh = pkh, minBidValue = minValue}
 
 data BidArgs = BidArgs
-    { bidPrice  :: Integer
+    { vidId     :: String
+    , bidPrice  :: Integer
     }
     deriving stock ( Show, Generic)
     deriving anyclass (FromJSON, ToJSON, ToSchema)
@@ -364,14 +374,15 @@ data BidArgs = BidArgs
 bid :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-bid = endpoint @"bid" @BidArgs $ \(BidArgs bidPrice) -> do
+bid = endpoint @"bid" @BidArgs $ \(BidArgs vidId bidPrice) -> do
     logInfo  @String "Bid Received."
     pkh         <- Contract.ownPubKeyHash
     let bidValue = Ada.lovelaceValueOf bidPrice
     void $ SM.runStep client  Bid{newBid = bidValue, newBidder = pkh}
 
 data PaydayArgs = PaydayArgs
-    { adaValue  :: Integer
+    { vidId     :: String
+    , adaValue  :: Integer
     }
     deriving stock ( Show, Generic)
     deriving anyclass (FromJSON, ToJSON, ToSchema)
@@ -379,32 +390,51 @@ data PaydayArgs = PaydayArgs
 payday :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-payday = endpoint @"payday" @PaydayArgs $ \(PaydayArgs adaValue) -> do
+payday = endpoint @"payday" @PaydayArgs $ \(PaydayArgs vidId adaValue) -> do
     logInfo  @String "PayDay!!!"
     let paydayValue = Ada.lovelaceValueOf adaValue
     void $ SM.runStep client Payday{paydayValue = paydayValue}
 
 
+data GrabArgs = GrabArgs
+    { vidId     :: String
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 grab :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-grab = endpoint @"grab" $ \() -> do
+grab = endpoint @"grab" @GrabArgs $ \(GrabArgs vidId) -> do
     logInfo  @String "Grabbing fees."
     pkh         <- Contract.ownPubKeyHash
     void $ SM.runStep client Grab{ownerPkh = pkh}
 
+
+data DestroyArgs = DestroyArgs
+    { vidId     :: String
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 destroy :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-destroy = endpoint @"destroy" $ \() -> do
+destroy = endpoint @"destroy" @DestroyArgs $ \(DestroyArgs vidId) -> do
     logInfo  @String "Destroy contract instance"
     void $ SM.runStep client Destroy
 
 
+data LookupArgs = LookupArgs
+    { vidId     :: String
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
+
 lookup :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-lookup = endpoint @"lookup" $ \() -> do
+lookup = endpoint @"lookup" @LookupArgs $ \(LookupArgs vidId) -> do
   logInfo  @String "Fetching contract state "
   maybeState <- SM.getOnChainState client
   case maybeState of
@@ -418,13 +448,13 @@ lookup = endpoint @"lookup" $ \() -> do
 --   and @"guess"@ with their respective argument types.
 type VidBIdStateMachineSchema =
         Endpoint "init" InitArgs
-        .\/ Endpoint "mint" ()
-        .\/ Endpoint "lookup" ()
+        .\/ Endpoint "mint" MintArgs
+        .\/ Endpoint "lookup" LookupArgs
         .\/ Endpoint "open" OpenArgs
         .\/ Endpoint "bid" BidArgs
         .\/ Endpoint "payday" PaydayArgs
-        .\/ Endpoint "grab" ()
-        .\/ Endpoint "destroy" ()
+        .\/ Endpoint "grab" GrabArgs
+        .\/ Endpoint "destroy" DestroyArgs
 
 contract :: ( AsContractError e
                  , AsSMContractError e
