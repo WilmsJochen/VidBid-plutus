@@ -28,6 +28,7 @@
 {-# LANGUAGE TypeFamilies               #-}
 {-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE ViewPatterns               #-}
+{-# LANGUAGE NamedFieldPuns             #-}
 
 module VidBid
     (
@@ -73,14 +74,25 @@ PlutusTx.makeLift ''ClearString
 newtype VidBidTokenValue = VidBidTokenValue Value deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''VidBidTokenValue
 
-newtype BidValue = BidValue Value deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
-PlutusTx.makeLift ''BidValue
+newtype MinimalBidValue = MinimalBidValue Value deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
+PlutusTx.makeLift ''MinimalBidValue
 
 newtype VidOwnerPkh = VidOwnerPkh PubKeyHash deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''VidOwnerPkh
 
 newtype PlatformPkh = PlatformPkh PubKeyHash deriving newtype (PlutusTx.ToData, PlutusTx.FromData, PlutusTx.UnsafeFromData, Show, FromJSON, ToJSON, ToSchema)
 PlutusTx.makeLift ''PlatformPkh
+
+data HighestBid =
+    HighestBid
+        { highestBid    :: Value
+        , highestBidder :: PubKeyHash
+        }
+    deriving stock (Show, Generic)
+    deriving anyclass (ToJSON, FromJSON)
+
+PlutusTx.unstableMakeIsData ''HighestBid
+PlutusTx.makeLift ''HighestBid
 
 hashString :: String -> HashedString
 hashString = HashedString . sha2_256 . toBuiltin . C.pack
@@ -95,8 +107,8 @@ clearString = ClearString . toBuiltin . C.pack
 data VidBIdState =
     Initialised PlatformPkh VidBidTokenValue VidOwnerPkh
     -- ^ Initial state. In this state only the 'MintTokens' action is allowed.
-    | Opened PlatformPkh VidBidTokenValue VidOwnerPkh BidValue
-    | Offered PlatformPkh VidBidTokenValue VidOwnerPkh BidValue
+    | Opened PlatformPkh VidBidTokenValue VidOwnerPkh MinimalBidValue
+    | Offered PlatformPkh VidBidTokenValue VidOwnerPkh HighestBid
     | Closed PlatformPkh VidBidTokenValue
     -- ^ Funds have been locked. In this state only the 'Guess' action is
     --   allowed.
@@ -104,6 +116,7 @@ data VidBIdState =
     -- ^ All funds were unlocked.
     deriving stock (Prelude.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
+
 PlutusTx.unstableMakeIsData ''VidBIdState
 PlutusTx.makeLift ''VidBIdState
 
@@ -111,9 +124,9 @@ PlutusTx.makeLift ''VidBIdState
 -- | Inputs (actions)
 data VidBIdInput =
     MintToken
-    | Open VidOwnerPkh BidValue
-    | Bid VidOwnerPkh BidValue
-    | PayDay Value
+    | Open VidOwnerPkh MinimalBidValue
+    | Bid { newBid :: Value, newBidder :: PubKeyHash }
+    | Payday Value
     | Grab
     | Destroy
     deriving stock (Prelude.Show, Generic)
@@ -125,6 +138,7 @@ PlutusTx.makeLift ''VidBIdInput
 {-# INLINABLE transition #-}
 transition :: State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
 transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
+--  MintToken
     (Initialised (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh), MintToken ) ->
         let constraints = Constraints.mustMintValue tokenVal <>
                           Constraints.mustPayToPubKey ownerPkh tokenVal <>
@@ -136,58 +150,61 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                 , stateValue = oldValue
                 }
              )
-    (Closed platformPkh (VidBidTokenValue tokenVal), Open (VidOwnerPkh ownerPkh) bidValue) ->
+--    OPEN
+    (Closed platformPkh (VidBidTokenValue tokenVal), Open (VidOwnerPkh ownerPkh) minBidValue) ->
         let constraints = mempty
         in
         Just ( constraints
              , State
-                { stateData = Opened platformPkh (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh) bidValue
+                { stateData = Opened platformPkh (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh) minBidValue
                 , stateValue = tokenVal
                 }
              )
-    (Opened platformPkh (VidBidTokenValue tokenVal) currentOwnerPkh (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
-     | isValidBidValue currentValue bidValue ->
+--    BID
+    (Opened platformPkh (VidBidTokenValue tokenVal) ownerPkh (MinimalBidValue minValue) , Bid{ newBid, newBidder})
+     | isValidBidValue minValue newBid ->
         let constraints = mempty
         in
         Just ( constraints
              , State
-                { stateData = Offered platformPkh (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
-                , stateValue = oldValue + bidValue
+                { stateData = Offered platformPkh (VidBidTokenValue tokenVal) ownerPkh HighestBid{highestBid = newBid, highestBidder = newBidder}
+                , stateValue = oldValue + newBid
                 }
              )
-    (Opened (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , PayDay value)
-     | scriptContainsToken oldValue tokenVal ->
-        let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
-                          Constraints.mustBeSignedBy platformPkh
+    (Offered platformPkh (VidBidTokenValue tokenVal) ownerPkh (HighestBid currentValue currentBidderPkh) , Bid{ newBid, newBidder})
+     | isValidBidValue currentValue newBid ->
+        let constraints = Constraints.mustPayToPubKey currentBidderPkh currentValue
         in
         Just ( constraints
              , State
-                { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
-                , stateValue = value
+                { stateData = Offered platformPkh (VidBidTokenValue tokenVal) ownerPkh HighestBid{highestBid = newBid, highestBidder = newBidder}
+                , stateValue = tokenVal + newBid
                 }
              )
-    (Offered platformPkh (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , Bid newOwnerPkh (BidValue bidValue))
-     | isValidBidValue currentValue bidValue ->
-        let constraints = Constraints.mustPayToPubKey currentOwnerPkh currentValue
-        in
-        Just ( constraints
-             , State
-                { stateData = Offered platformPkh (VidBidTokenValue tokenVal) newOwnerPkh (BidValue bidValue)
-                , stateValue = tokenVal + bidValue
-                }
-             )
-    (Offered (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , PayDay value)
-     | scriptContainsToken oldValue tokenVal ->
-        let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
-                          Constraints.mustBeSignedBy platformPkh
-        in
-        Just ( constraints
-             , State
-                { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
-                , stateValue = value
-                }
-             )
-    _ -> Nothing
+----   PAYDAY
+--   (Opened (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (MinimalBidValue currentValue) , Payday value)
+--    | scriptContainsToken oldValue tokenVal ->
+--       let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
+--                         Constraints.mustBeSignedBy platformPkh
+--       in
+--       Just ( constraints
+--            , State
+--               { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
+--               , stateValue = value
+--               }
+--            )
+--    (Offered (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh currentOwnerPkh) (BidValue currentValue) , Payday value)
+--    | scriptContainsToken oldValue tokenVal ->
+--        let constraints = Constraints.mustPayToPubKey currentOwnerPkh tokenVal <>
+--                          Constraints.mustBeSignedBy platformPkh
+--        in
+--        Just ( constraints
+--             , State
+--                { stateData = Closed  (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
+--                , stateValue = value
+--                }
+--             )
+--    _ -> Nothing
 
 
 {-# INLINABLE isValidBidValue #-}
@@ -267,7 +284,7 @@ open :: ( AsContractError e
 open = endpoint @"open" @OpenArgs $ \(OpenArgs minPrice) -> do
     pkh         <- Contract.ownPubKeyHash
     let ownerPkh  = VidOwnerPkh pkh
-        minValue = BidValue (Ada.lovelaceValueOf minPrice)
+        minValue = MinimalBidValue (Ada.lovelaceValueOf minPrice)
     void $ SM.runStep client (Open ownerPkh minValue)
 
 data BidArgs = BidArgs
@@ -282,8 +299,22 @@ bid :: ( AsContractError e
 bid = endpoint @"bid" @BidArgs $ \(BidArgs bidPrice) -> do
     pkh         <- Contract.ownPubKeyHash
     let bidderPkh  = VidOwnerPkh pkh
-        bidValue = BidValue (Ada.lovelaceValueOf bidPrice)
-    void $ SM.runStep client (Bid bidderPkh bidValue)
+        bidValue = Ada.lovelaceValueOf bidPrice
+    void $ SM.runStep client  Bid{newBid = bidValue, newBidder = pkh}
+
+data PaydayArgs = PaydayArgs
+    { adaValue  :: Integer
+    }
+    deriving stock ( Show, Generic)
+    deriving anyclass (FromJSON, ToJSON, ToSchema)
+
+payday :: ( AsContractError e
+            , AsSMContractError e
+            ) => Promise () VidBIdStateMachineSchema e ()
+payday = endpoint @"payday" @PaydayArgs $ \(PaydayArgs adaValue) -> do
+    pkh         <- Contract.ownPubKeyHash
+    let value = Ada.lovelaceValueOf adaValue
+    void $ SM.runStep client (Payday value)
 
 
 lookup :: ( AsContractError e
@@ -307,11 +338,12 @@ type VidBIdStateMachineSchema =
         .\/ Endpoint "lookup" ()
         .\/ Endpoint "open" OpenArgs
         .\/ Endpoint "bid" BidArgs
+        .\/ Endpoint "payday" PaydayArgs
 
 contract :: ( AsContractError e
                  , AsSMContractError e
                  ) => Contract () VidBIdStateMachineSchema e ()
 contract = do
-    selectList [init, mintToken, lookup, open, bid] >> contract
+    selectList [init, mintToken, lookup, open, bid, payday] >> contract
 
 
