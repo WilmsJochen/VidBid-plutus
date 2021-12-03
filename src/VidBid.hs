@@ -216,8 +216,7 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                   }
                )
 --    Grab
-    (Closed platformPkh (VidBidTokenValue tokenVal), Grab{ownerPkh} )
-     | scriptContainsToken oldValue tokenVal ->
+    (Closed platformPkh (VidBidTokenValue tokenVal), Grab{ownerPkh} ) ->
         let constraints = Constraints.mustSpendAtLeast tokenVal <>
                           Constraints.mustPayToPubKey ownerPkh oldValue
         in
@@ -227,6 +226,48 @@ transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, 
                   , stateValue = Ada.lovelaceValueOf 0
                   }
                )
+--    Destroy
+    (Initialised (PlatformPkh platformPkh) _ _ ,  Destroy ) ->
+        let constraints = Constraints.mustBeSignedBy platformPkh
+        in
+          Just ( constraints
+               , State
+                  { stateData = Destroyed
+                  , stateValue = Ada.lovelaceValueOf 0
+                  }
+               )
+    (Closed (PlatformPkh platformPkh) _ ,  Destroy ) ->
+        let constraints = Constraints.mustBeSignedBy platformPkh
+        in
+          Just ( constraints
+               , State
+                  { stateData = Destroyed
+                  , stateValue = Ada.lovelaceValueOf 0
+                  }
+               )
+    (Opened (PlatformPkh platformPkh) _ (VidOwnerPkh ownerPkh) _ ,  Destroy ) ->
+        let constraints = Constraints.mustBeSignedBy platformPkh <>
+                          Constraints.mustPayToPubKey ownerPkh oldValue
+        in
+          Just ( constraints
+               , State
+                  { stateData = Destroyed
+                  , stateValue = Ada.lovelaceValueOf 0
+                  }
+               )
+    (Offered (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh) (HighestBid bidValue bidderPkh) ,  Destroy ) ->
+        let constraints = Constraints.mustBeSignedBy platformPkh <>
+                          Constraints.mustPayToPubKey ownerPkh tokenVal <>
+                          Constraints.mustPayToPubKey bidderPkh bidValue
+        in
+          Just ( constraints
+               , State
+                  { stateData = Destroyed
+                  , stateValue = Ada.lovelaceValueOf 0
+                  }
+               )
+
+--Nothing matches
     _ -> Nothing
 
 
@@ -278,6 +319,7 @@ init :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 init = endpoint @"init" @InitArgs $ \(InitArgs initVidId platformPkhArg) -> do
+    logInfo  @String "Initialised"
     pkh         <- Contract.ownPubKeyHash
     let tokenVal = VidBidTokenValue (VidBidMint.getTokenValue platformPkhArg initVidId)
         ownerPkh = VidOwnerPkh pkh
@@ -290,6 +332,7 @@ mintToken :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 mintToken = endpoint @"mint" $ \() -> do
+    logInfo  @String "Token minted."
     pkh         <- Contract.ownPubKeyHash
     let lookups = Constraints.mintingPolicy (policy pkh)
     logInfo @String $ "Platorm pkh: " ++ show pkh
@@ -305,6 +348,7 @@ open :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 open = endpoint @"open" @OpenArgs $ \(OpenArgs minPrice) -> do
+    logInfo  @String "Auction opened."
     pkh         <- Contract.ownPubKeyHash
     let minValue = Ada.lovelaceValueOf minPrice
     void $ SM.runStep client Open{ownerPkh = pkh, minBidValue = minValue}
@@ -319,9 +363,9 @@ bid :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 bid = endpoint @"bid" @BidArgs $ \(BidArgs bidPrice) -> do
+    logInfo  @String "Bid Received."
     pkh         <- Contract.ownPubKeyHash
-    let bidderPkh  = VidOwnerPkh pkh
-        bidValue = Ada.lovelaceValueOf bidPrice
+    let bidValue = Ada.lovelaceValueOf bidPrice
     void $ SM.runStep client  Bid{newBid = bidValue, newBidder = pkh}
 
 data PaydayArgs = PaydayArgs
@@ -334,6 +378,7 @@ payday :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 payday = endpoint @"payday" @PaydayArgs $ \(PaydayArgs adaValue) -> do
+    logInfo  @String "PayDay!!!"
     let paydayValue = Ada.lovelaceValueOf adaValue
     void $ SM.runStep client Payday{paydayValue = paydayValue}
 
@@ -342,8 +387,16 @@ grab :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 grab = endpoint @"grab" $ \() -> do
+    logInfo  @String "Grabbing fees."
     pkh         <- Contract.ownPubKeyHash
     void $ SM.runStep client Grab{ownerPkh = pkh}
+
+destroy :: ( AsContractError e
+            , AsSMContractError e
+            ) => Promise () VidBIdStateMachineSchema e ()
+destroy = endpoint @"destroy" $ \() -> do
+    logInfo  @String "Destroy contract instance"
+    void $ SM.runStep client Destroy
 
 
 lookup :: ( AsContractError e
@@ -369,11 +422,12 @@ type VidBIdStateMachineSchema =
         .\/ Endpoint "bid" BidArgs
         .\/ Endpoint "payday" PaydayArgs
         .\/ Endpoint "grab" ()
+        .\/ Endpoint "destroy" ()
 
 contract :: ( AsContractError e
                  , AsSMContractError e
                  ) => Contract () VidBIdStateMachineSchema e ()
 contract = do
-    selectList [init, mintToken, lookup, open, bid, payday, grab] >> contract
+    selectList [init, mintToken, lookup, open, bid, payday, grab, destroy] >> contract
 
 

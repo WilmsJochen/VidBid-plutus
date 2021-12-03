@@ -208,6 +208,144 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Create wallet 3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"Wallet3\", jsonData.wiWallet.getWalletId);",
+									"pm.environment.set(\"PubKeyHash3\", jsonData.wiPubKeyHash.getPubKeyHash);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/create",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 3 total funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet3}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet3}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create wallet 4",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"Wallet4\", jsonData.wiWallet.getWalletId);",
+									"pm.environment.set(\"PubKeyHash4\", jsonData.wiPubKeyHash.getPubKeyHash);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/create",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 4 total funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet4}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet4}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
 				}
 			]
 		},
@@ -857,7 +995,7 @@
 			"name": "Vidbid",
 			"item": [
 				{
-					"name": "Create an instance of VidBidContract Copy",
+					"name": "Create wallet 1 Copy",
 					"event": [
 						{
 							"listen": "test",
@@ -868,8 +1006,8 @@
 									"});",
 									"",
 									"var jsonData = pm.response.json();",
-									"pm.environment.set(\"VidBidContractInstance1\", jsonData.unContractInstanceId);",
-									""
+									"pm.environment.set(\"Wallet1\", jsonData.wiWallet.getWalletId);",
+									"pm.environment.set(\"PubKeyHash1\", jsonData.wiPubKeyHash.getPubKeyHash);"
 								],
 								"type": "text/javascript"
 							}
@@ -878,31 +1016,21 @@
 					"request": {
 						"method": "POST",
 						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"caID\": \"VidBidContract\", \n    \"caWallet\":{\n        \"getWalletId\": \"{{Wallet1}}\"\n    }\n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
 						"url": {
-							"raw": "{{PAB_ENV}}/api/contract/activate",
+							"raw": "{{PAB_ENV}}/wallet/create",
 							"host": [
 								"{{PAB_ENV}}"
 							],
 							"path": [
-								"api",
-								"contract",
-								"activate"
+								"wallet",
+								"create"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "init",
+					"name": "Create wallet 2 Copy",
 					"event": [
 						{
 							"listen": "test",
@@ -911,7 +1039,10 @@
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
-									""
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"Wallet2\", jsonData.wiWallet.getWalletId);",
+									"pm.environment.set(\"PubKeyHash2\", jsonData.wiPubKeyHash.getPubKeyHash);"
 								],
 								"type": "text/javascript"
 							}
@@ -920,34 +1051,21 @@
 					"request": {
 						"method": "POST",
 						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "{\n    \"initVidId\": {\n        \"unTokenName\": \"https://www.youtube.com/watch?v=dQw4w9Wqqw\"\n    },\n    \"initOwnerPkh\": {\n        \"getPubKeyHash\": \"{{PubKeyHash2}}\"\n    } \n}",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
 						"url": {
-							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/init",
+							"raw": "{{PAB_ENV}}/wallet/create",
 							"host": [
 								"{{PAB_ENV}}"
 							],
 							"path": [
-								"api",
-								"contract",
-								"instance",
-								"{{VidBidContractInstance1}}",
-								"endpoint",
-								"init"
+								"wallet",
+								"create"
 							]
 						}
 					},
 					"response": []
 				},
 				{
-					"name": "lookup",
+					"name": "Create wallet 3 Copy",
 					"event": [
 						{
 							"listen": "test",
@@ -956,7 +1074,10 @@
 									"pm.test(\"Status code is 200\", function () {",
 									"    pm.response.to.have.status(200);",
 									"});",
-									""
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"Wallet3\", jsonData.wiWallet.getWalletId);",
+									"pm.environment.set(\"PubKeyHash3\", jsonData.wiPubKeyHash.getPubKeyHash);"
 								],
 								"type": "text/javascript"
 							}
@@ -965,27 +1086,49 @@
 					"request": {
 						"method": "POST",
 						"header": [],
-						"body": {
-							"mode": "raw",
-							"raw": "[]",
-							"options": {
-								"raw": {
-									"language": "json"
-								}
-							}
-						},
 						"url": {
-							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/lookup",
+							"raw": "{{PAB_ENV}}/wallet/create",
 							"host": [
 								"{{PAB_ENV}}"
 							],
 							"path": [
-								"api",
-								"contract",
-								"instance",
-								"{{VidBidContractInstance1}}",
-								"endpoint",
-								"lookup"
+								"wallet",
+								"create"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create wallet 4 Copy",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"Wallet4\", jsonData.wiWallet.getWalletId);",
+									"pm.environment.set(\"PubKeyHash4\", jsonData.wiPubKeyHash.getPubKeyHash);"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/create",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"create"
 							]
 						}
 					},
@@ -1037,7 +1180,231 @@
 					"response": []
 				},
 				{
-					"name": "Open",
+					"name": "init",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"initVidId\": {\n        \"unTokenName\": \"https://www.youtube.com/watch?v=dQw4w9Wqqw\"\n    },\n    \"platformPkh\": {\n        \"getPubKeyHash\": \"{{PubKeyHash1}}\"\n    } \n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/endpoint/init",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance2}}",
+								"endpoint",
+								"init"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 1 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet1}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet1}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 2 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet2}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet2}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 3 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet3}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet3}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 4 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet4}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet4}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create an instance of VidBidContract Copy",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"VidBidContractInstance1\", jsonData.unContractInstanceId);",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"caID\": \"VidBidContract\", \n    \"caWallet\":{\n        \"getWalletId\": \"{{Wallet1}}\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/activate",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"activate"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "mint",
 					"event": [
 						{
 							"listen": "test",
@@ -1065,6 +1432,134 @@
 							}
 						},
 						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/mint",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance1}}",
+								"endpoint",
+								"mint"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "get wallet 2 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"console.log(jsonData.getValue[1][1][0][1])",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[1][1][0][1]).to.eql(1);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet2}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet2}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/endpoint/lookup",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance2}}",
+								"endpoint",
+								"lookup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Open",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"minPrice\": 2000000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
 							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/endpoint/open",
 							"host": [
 								"{{PAB_ENV}}"
@@ -1076,6 +1571,770 @@
 								"{{VidBidContractInstance2}}",
 								"endpoint",
 								"open"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/endpoint/lookup",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance2}}",
+								"endpoint",
+								"lookup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create an instance of VidBidContract 3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"VidBidContractInstance3\", jsonData.unContractInstanceId);",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"caID\": \"VidBidContract\", \n    \"caWallet\":{\n        \"getWalletId\": \"{{Wallet3}}\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/activate",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"activate"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "bid",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"bidPrice\": 2500000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance3}}/endpoint/bid",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance3}}",
+								"endpoint",
+								"bid"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/endpoint/lookup",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance2}}",
+								"endpoint",
+								"lookup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "check wallet 3 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.below(10000000000 - 300000);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet3}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet3}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create an instance of VidBidContract 4",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.environment.set(\"VidBidContractInstance4\", jsonData.unContractInstanceId);",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"caID\": \"VidBidContract\", \n    \"caWallet\":{\n        \"getWalletId\": \"{{Wallet4}}\"\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/activate",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"activate"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "bid 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"bidPrice\": 3000000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance4}}/endpoint/bid",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance4}}",
+								"endpoint",
+								"bid"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "check wallet 3 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.above(10000000000 - 300000);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet3}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet3}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "check wallet 4 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.below(10000000000 - 350000);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet4}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet4}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "bid 3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"bidPrice\": 4000000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance3}}/endpoint/bid",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance3}}",
+								"endpoint",
+								"bid"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "check wallet 3 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.below(10000000000 - 300000);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet3}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet3}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "check wallet 4 funds",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.above(10000000000 - 350000);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet4}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet4}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "payday",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"adaValue\": 2000000\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/payday",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance1}}",
+								"endpoint",
+								"payday"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "check wallet 2",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"console.log(jsonData.getValue[0][1][0][1])",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.above(10000000000);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet2}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet2}}",
+								"total-funds"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/lookup",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance1}}",
+								"endpoint",
+								"lookup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Grab",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance3}}/endpoint/grab",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance3}}",
+								"endpoint",
+								"grab"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "lookup",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/endpoint/lookup",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance2}}",
+								"endpoint",
+								"lookup"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "check wallet 3",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									"",
+									"var jsonData = pm.response.json();",
+									"pm.test('Check token has existed but has amount 0', () => {",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.above(10000000000 - 400000);",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{PAB_ENV}}/wallet/{{Wallet3}}/total-funds",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"wallet",
+								"{{Wallet3}}",
+								"total-funds"
 							]
 						}
 					},
@@ -1101,7 +2360,51 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/status",
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance3}}/status",
+							"host": [
+								"{{PAB_ENV}}"
+							],
+							"path": [
+								"api",
+								"contract",
+								"instance",
+								"{{VidBidContractInstance3}}",
+								"status"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Destroy",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test(\"Status code is 200\", function () {",
+									"    pm.response.to.have.status(200);",
+									"});",
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "[]",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance1}}/endpoint/destroy",
 							"host": [
 								"{{PAB_ENV}}"
 							],
@@ -1110,7 +2413,8 @@
 								"contract",
 								"instance",
 								"{{VidBidContractInstance1}}",
-								"status"
+								"endpoint",
+								"destroy"
 							]
 						}
 					},
