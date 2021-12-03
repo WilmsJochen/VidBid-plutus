@@ -309,8 +309,8 @@ client :: SM.StateMachineClient VidBIdState VidBIdInput
 client = SM.mkStateMachineClient $ SM.StateMachineInstance machine typedVidbidValidator
 
 data InitArgs = InitArgs
-    { initVidId     :: TokenName
-    , platformPkh   :: PubKeyHash
+    { vidId            :: String
+    , platformPkhStr   :: String
     }
     deriving stock ( Show, Generic)
     deriving anyclass (FromJSON, ToJSON, ToSchema)
@@ -318,14 +318,16 @@ data InitArgs = InitArgs
 init :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-init = endpoint @"init" @InitArgs $ \(InitArgs initVidId platformPkhArg) -> do
+init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhStr) -> do
     logInfo  @String "Initialised"
     pkh         <- Contract.ownPubKeyHash
-    let tokenVal = VidBidTokenValue (VidBidMint.getTokenValue platformPkhArg initVidId)
-        ownerPkh = VidOwnerPkh pkh
-        platformPkh = PlatformPkh platformPkhArg
+    let initVidId          = V.TokenName (toBuiltin (C.pack vidId))
+        platformPubKeyHash = PubKeyHash (toBuiltin (C.pack platformPkhStr))
+        tokenVal           = VidBidTokenValue (VidBidMint.getTokenValue platformPubKeyHash initVidId)
+        ownerPkh           = VidOwnerPkh pkh
+        platformPkh        = PlatformPkh platformPubKeyHash
 
-    logInfo @String $ "Platorm pkh: " ++ show platformPkhArg
+    logInfo @String $ "Platorm pkh: " ++ show platformPkhStr
     void $ SM.runInitialise client (Initialised platformPkh tokenVal ownerPkh) mempty
 
 mintToken :: ( AsContractError e
