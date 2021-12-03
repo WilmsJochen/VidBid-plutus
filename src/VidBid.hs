@@ -93,7 +93,7 @@ clearString = ClearString . toBuiltin . C.pack
 -- | State of the guessing vidBId
 -- | State of the guessing vidBId
 data VidBIdState =
-    Initialised PlatformPkh VidBidTokenValue
+    Initialised PlatformPkh VidBidTokenValue VidOwnerPkh
     -- ^ Initial state. In this state only the 'MintTokens' action is allowed.
     | Opened PlatformPkh VidBidTokenValue VidOwnerPkh BidValue
     | Offered PlatformPkh VidBidTokenValue VidOwnerPkh BidValue
@@ -110,7 +110,7 @@ PlutusTx.makeLift ''VidBIdState
 
 -- | Inputs (actions)
 data VidBIdInput =
-    MintToken VidOwnerPkh
+    MintToken
     | Open VidOwnerPkh BidValue
     | Bid VidOwnerPkh BidValue
     | PayDay Value
@@ -125,18 +125,19 @@ PlutusTx.makeLift ''VidBIdInput
 {-# INLINABLE transition #-}
 transition :: State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
 transition State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
-    (Initialised platformPkh (VidBidTokenValue tokenVal), MintToken (VidOwnerPkh ownerPkh)) ->
+    (Initialised (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh), MintToken ) ->
         let constraints = Constraints.mustMintValue tokenVal <>
-                          Constraints.mustPayToPubKey ownerPkh tokenVal
+                          Constraints.mustPayToPubKey ownerPkh tokenVal <>
+                          Constraints.mustBeSignedBy platformPkh
         in
         Just ( constraints
              , State
-                { stateData = Closed platformPkh (VidBidTokenValue tokenVal)
+                { stateData = Closed (PlatformPkh platformPkh) (VidBidTokenValue tokenVal)
                 , stateValue = oldValue
                 }
              )
     (Closed platformPkh (VidBidTokenValue tokenVal), Open (VidOwnerPkh ownerPkh) bidValue) ->
-        let constraints = Constraints.mustPayToPubKey ownerPkh tokenVal
+        let constraints = mempty
         in
         Just ( constraints
              , State
@@ -228,7 +229,7 @@ client = SM.mkStateMachineClient $ SM.StateMachineInstance machine typedVidbidVa
 
 data InitArgs = InitArgs
     { initVidId     :: TokenName
-    , initOwnerPkh  :: PubKeyHash
+    , platformPkh   :: PubKeyHash
     }
     deriving stock ( Show, Generic)
     deriving anyclass (FromJSON, ToJSON, ToSchema)
@@ -236,14 +237,23 @@ data InitArgs = InitArgs
 init :: ( AsContractError e
             , AsSMContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
-init = endpoint @"init" @InitArgs $ \(InitArgs initVidId initOwnerPkh) -> do
+init = endpoint @"init" @InitArgs $ \(InitArgs initVidId platformPkhArg) -> do
     pkh         <- Contract.ownPubKeyHash
-    let tokenVal = VidBidTokenValue (VidBidMint.getTokenValue pkh initVidId)
-        ownerPkh = VidOwnerPkh initOwnerPkh
-        platformPkh = PlatformPkh pkh
-        lookups  = Constraints.mintingPolicy (policy pkh)
-    void $ SM.runInitialise client (Initialised platformPkh tokenVal) mempty
-    void $ SM.runStepWith lookups mempty client (MintToken ownerPkh)
+    let tokenVal = VidBidTokenValue (VidBidMint.getTokenValue platformPkhArg initVidId)
+        ownerPkh = VidOwnerPkh pkh
+        platformPkh = PlatformPkh platformPkhArg
+
+    logInfo @String $ "Platorm pkh: " ++ show platformPkhArg
+    void $ SM.runInitialise client (Initialised platformPkh tokenVal ownerPkh) mempty
+
+mintToken :: ( AsContractError e
+            , AsSMContractError e
+            ) => Promise () VidBIdStateMachineSchema e ()
+mintToken = endpoint @"mint" $ \() -> do
+    pkh         <- Contract.ownPubKeyHash
+    let lookups = Constraints.mintingPolicy (policy pkh)
+    logInfo @String $ "Platorm pkh: " ++ show pkh
+    void $ SM.runStepWith lookups mempty client (MintToken)
 
 data OpenArgs = OpenArgs
     { minPrice  :: Integer
@@ -271,9 +281,9 @@ bid :: ( AsContractError e
             ) => Promise () VidBIdStateMachineSchema e ()
 bid = endpoint @"bid" @BidArgs $ \(BidArgs bidPrice) -> do
     pkh         <- Contract.ownPubKeyHash
-    let ownerPkh  = VidOwnerPkh pkh
+    let bidderPkh  = VidOwnerPkh pkh
         bidValue = BidValue (Ada.lovelaceValueOf bidPrice)
-    void $ SM.runStep client (Bid ownerPkh bidValue)
+    void $ SM.runStep client (Bid bidderPkh bidValue)
 
 
 lookup :: ( AsContractError e
@@ -293,6 +303,7 @@ lookup = endpoint @"lookup" $ \() -> do
 --   and @"guess"@ with their respective argument types.
 type VidBIdStateMachineSchema =
         Endpoint "init" InitArgs
+        .\/ Endpoint "mint" ()
         .\/ Endpoint "lookup" ()
         .\/ Endpoint "open" OpenArgs
         .\/ Endpoint "bid" BidArgs
@@ -301,6 +312,6 @@ contract :: ( AsContractError e
                  , AsSMContractError e
                  ) => Contract () VidBIdStateMachineSchema e ()
 contract = do
-    selectList [init, lookup, open, bid] >> contract
+    selectList [init, mintToken, lookup, open, bid] >> contract
 
 
