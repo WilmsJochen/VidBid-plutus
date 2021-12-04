@@ -1,6 +1,6 @@
 {
 	"info": {
-		"_postman_id": "0ba83b7c-69c6-48ae-b398-fe7a3100c50a",
+		"_postman_id": "2b27ee79-17a3-493e-88b1-954b17cd1a28",
 		"name": "Vidbid",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
@@ -1200,7 +1200,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"initVidId\": {\n        \"unTokenName\": \"https://www.youtube.com/watch?v=dQw4w9Wqqw\"\n    },\n    \"platformPkh\": {\n        \"getPubKeyHash\": \"{{PubKeyHash1}}\"\n    } \n}",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\",\n    \"platformPkh\": {\n        \"getPubKeyHash\": \"{{PubKeyHash1}}\"\n    } \n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1424,7 +1424,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1507,7 +1507,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1552,7 +1552,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"minPrice\": 2000000\n}",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\",\n    \"minPrice\": 2000000\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1597,7 +1597,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1687,7 +1687,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"bidPrice\": 2500000\n}",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\",\n    \"bidPrice\": 2500000\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1732,7 +1732,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1859,7 +1859,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"bidPrice\": 3000000\n}",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\",\n    \"bidPrice\": 3000000\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1978,7 +1978,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"bidPrice\": 4000000\n}",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\",\n    \"bidPrice\": 4000000\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2097,7 +2097,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"adaValue\": 2000000\n}",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\",\n    \"adaValue\": 2000000\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2180,7 +2180,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2234,7 +2234,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2279,7 +2279,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -2316,7 +2316,7 @@
 									"",
 									"var jsonData = pm.response.json();",
 									"pm.test('Check token has existed but has amount 0', () => {",
-									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.above(10000000000 - 400000);",
+									"    pm.expect(jsonData.getValue[0][1][0][1]).to.be.above(10000000000 - 4000000);",
 									"})"
 								],
 								"type": "text/javascript"
@@ -2360,7 +2360,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance3}}/status",
+							"raw": "{{PAB_ENV}}/api/contract/instance/{{VidBidContractInstance2}}/status",
 							"host": [
 								"{{PAB_ENV}}"
 							],
@@ -2368,7 +2368,7 @@
 								"api",
 								"contract",
 								"instance",
-								"{{VidBidContractInstance3}}",
+								"{{VidBidContractInstance2}}",
 								"status"
 							]
 						}
@@ -2396,7 +2396,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "[]",
+							"raw": "{\n    \"vidId\":  \"https://www.youtube.com/watch?v=xLvMmC_ZKLk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"

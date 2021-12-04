@@ -302,7 +302,7 @@ client vidId = SM.mkStateMachineClient $ SM.StateMachineInstance (machine vidId)
 
 data InitArgs = InitArgs
     { vidId            :: String
-    , platformPkhStr   :: PubKeyHash
+    , platformPkh      :: PubKeyHash
     }
     deriving stock ( Show, Generic)
     deriving anyclass (FromJSON, ToJSON, ToSchema)
