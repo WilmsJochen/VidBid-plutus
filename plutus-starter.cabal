@@ -45,6 +45,10 @@ library
       VidBid
       VidBidMint
       Plutus.Contracts.Game
+    default-extensions: ExplicitForAll ScopedTypeVariables
+                        DeriveGeneric StandaloneDeriving DeriveLift
+                        GeneralizedNewtypeDeriving DeriveFunctor DeriveFoldable
+                        DeriveTraversable MultiParamTypeClasses ImportQualifiedPost
     build-depends:
       base >= 4.9 && < 5,
       aeson,
@@ -57,6 +61,7 @@ library
       plutus-tx,
       plutus-ledger,
       text,
+      semigroups -any,
     hs-source-dirs: src examples/src
 
 test-suite plutus-example-projects-test

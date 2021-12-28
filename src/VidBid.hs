@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveAnyClass        #-}
 {-# LANGUAGE DeriveGeneric         #-}
+{-# LANGUAGE DerivingVia           #-}
 {-# LANGUAGE DerivingStrategies    #-}
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
@@ -12,21 +13,11 @@
 {-# LANGUAGE TypeFamilies          #-}
 {-# LANGUAGE TypeOperators         #-}
 {-# LANGUAGE AllowAmbiguousTypes        #-}
-{-# LANGUAGE DataKinds                  #-}
-{-# LANGUAGE DeriveAnyClass             #-}
-{-# LANGUAGE DeriveGeneric              #-}
-{-# LANGUAGE DerivingStrategies         #-}
 {-# LANGUAGE FlexibleContexts           #-}
 {-# LANGUAGE FlexibleInstances          #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE MultiParamTypeClasses      #-}
-{-# LANGUAGE NoImplicitPrelude          #-}
 {-# LANGUAGE PartialTypeSignatures      #-}
 {-# LANGUAGE RecordWildCards            #-}
-{-# LANGUAGE ScopedTypeVariables        #-}
-{-# LANGUAGE TypeApplications           #-}
-{-# LANGUAGE TypeFamilies               #-}
-{-# LANGUAGE TypeOperators              #-}
 {-# LANGUAGE ViewPatterns               #-}
 {-# LANGUAGE NamedFieldPuns             #-}
 {-# LANGUAGE DuplicateRecordFields      #-}
@@ -42,6 +33,7 @@ import           Data.Aeson                   (FromJSON, ToJSON)
 import           Data.Monoid                  (Last (..))
 import           Data.Text                    (Text, pack)
 import qualified Data.ByteString.Char8        as C
+import           Data.Semigroup.Generic       (GenericSemigroupMonoid (..))
 
 import           GHC.Generics                 (Generic)
 import           Ledger                       hiding (singleton)
@@ -99,7 +91,7 @@ PlutusTx.makeLift ''HighestBid
 
 -- | State of the guessing vidBId
 -- | State of the guessing vidBId
-data VidBIdState =
+data VidBidState =
     Initialised PlatformPkh VidBidTokenValue VidOwnerPkh
     -- ^ Initial state. In this state only the 'MintTokens' action is allowed.
     | Opened PlatformPkh VidBidTokenValue VidOwnerPkh MinimalBidValue
@@ -112,9 +104,22 @@ data VidBIdState =
     deriving stock (Prelude.Show, Generic)
     deriving anyclass (ToJSON, FromJSON)
 
-PlutusTx.unstableMakeIsData ''VidBIdState
-PlutusTx.makeLift ''VidBIdState
+PlutusTx.unstableMakeIsData ''VidBidState
+PlutusTx.makeLift ''VidBidState
 
+-- | Observable state of the auction app
+data VidBidOutput =
+    VidBidOutput
+        { vidbidState        :: Last VidBidState
+        }
+    deriving stock (Show, Generic)
+    deriving anyclass (ToJSON, FromJSON)
+
+deriving via (GenericSemigroupMonoid VidBidOutput) instance (Prelude.Semigroup VidBidOutput)
+deriving via (GenericSemigroupMonoid VidBidOutput) instance (Prelude.Monoid VidBidOutput)
+
+vidbidStateOut :: VidBidState -> VidBidOutput
+vidbidStateOut s = Prelude.mempty  { vidbidState = Last (Just s) }
 
 -- | Inputs (actions)
 data VidBIdInput =
@@ -131,7 +136,7 @@ PlutusTx.makeLift ''VidBIdInput
 
 
 {-# INLINABLE transition #-}
-transition :: VidId -> State VidBIdState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBIdState)
+transition :: VidId -> State VidBidState -> VidBIdInput -> Maybe (TxConstraints Void Void, State VidBidState)
 transition _ State{stateData=oldData, stateValue=oldValue} input = case (oldData, input) of
 --  MintToken
     (Initialised (PlatformPkh platformPkh) (VidBidTokenValue tokenVal) (VidOwnerPkh ownerPkh), MintToken ) ->
@@ -278,10 +283,10 @@ isValidBidValue old new = Ada.fromValue old < Ada.fromValue new
 scriptContainsToken :: Value -> Value -> Bool
 scriptContainsToken old token = V.geq old token
 
-type VidBIdStateMachine = SM.StateMachine VidBIdState VidBIdInput
+type VidBIdStateMachine = SM.StateMachine VidBidState VidBIdInput
 
 {-# INLINABLE machine #-}
-machine :: VidId ->  StateMachine VidBIdState VidBIdInput
+machine :: VidId ->  StateMachine VidBidState VidBIdInput
 machine vidId = SM.mkStateMachine Nothing (transition vidId) isFinal where
     isFinal Destroyed = True
     isFinal _         = False
@@ -297,7 +302,7 @@ typedVidbidValidator = Scripts.mkTypedValidatorParam @VidBIdStateMachine
     where
         wrap = Scripts.wrapValidator
 
-client :: VidId -> SM.StateMachineClient VidBIdState VidBIdInput
+client :: VidId -> SM.StateMachineClient VidBidState VidBIdInput
 client vidId = SM.mkStateMachineClient $ SM.StateMachineInstance (machine vidId) (typedVidbidValidator vidId)
 
 data InitArgs = InitArgs
@@ -309,7 +314,7 @@ data InitArgs = InitArgs
 
 init :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhParam) -> do
     logInfo  @String $ "Initialise with vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
@@ -318,7 +323,17 @@ init = endpoint @"init" @InitArgs $ \(InitArgs vidId platformPkhParam) -> do
         ownerPkh           = VidOwnerPkh pkh
         platformPkh        = PlatformPkh platformPkhParam
     void $ SM.runInitialise (client (vidIdFromString vidId)) (Initialised platformPkh tokenVal ownerPkh) mempty
-
+    maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
+    case maybeState of
+      Just (onChainState, _)  ->
+        do
+          let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+          logInfo @String $ "VidBid contract found in state: " ++ show valueInState
+          tell $ vidbidStateOut $ valueInState
+          pure (Just (vidbidStateOut $ valueInState))
+      Nothing -> do
+        logError @String $ "Couldn't find state of contract."
+        pure Nothing
 
 data MintArgs = MintArgs
     { vidId            :: String
@@ -328,7 +343,7 @@ data MintArgs = MintArgs
 
 mintToken :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 mintToken = endpoint @"mint" @MintArgs $ \(MintArgs vidId) -> do
     logInfo  @String $ "Mint token for vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
@@ -336,6 +351,17 @@ mintToken = endpoint @"mint" @MintArgs $ \(MintArgs vidId) -> do
         theClient =  client (vidIdFromString vidId)
     logInfo @String $ "Platorm pkh: " ++ show pkh
     void $ SM.runStepWith lookups mempty theClient (MintToken)
+    maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
+    case maybeState of
+      Just (onChainState, _)  ->
+        do
+          let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+          logInfo @String $ "VidBid contract found in state: " ++ show valueInState
+          tell $ vidbidStateOut $ valueInState
+          pure (Just (vidbidStateOut $ valueInState))
+      Nothing -> do
+        logError @String $ "Couldn't find state of contract."
+        pure Nothing
 
 data OpenArgs = OpenArgs
     { vidId     :: String
@@ -346,12 +372,23 @@ data OpenArgs = OpenArgs
 
 open :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 open = endpoint @"open" @OpenArgs $ \(OpenArgs vidId minPrice) -> do
     logInfo  @String $ "Open auction for vidId: " ++  vidId
     pkh         <- Contract.ownPubKeyHash
     let minValue = Ada.lovelaceValueOf minPrice
     void $ SM.runStep (client (vidIdFromString vidId)) Open{ownerPkh = pkh, minBidValue = minValue}
+    maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
+    case maybeState of
+      Just (onChainState, _)  ->
+        do
+          let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+          logInfo @String $ "VidBid contract found in state: " ++ show valueInState
+          tell $ vidbidStateOut $ valueInState
+          pure (Just (vidbidStateOut $ valueInState))
+      Nothing -> do
+        logError @String $ "Couldn't find state of contract."
+        pure Nothing
 
 data BidArgs = BidArgs
     { vidId     :: String
@@ -362,12 +399,23 @@ data BidArgs = BidArgs
 
 bid :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 bid = endpoint @"bid" @BidArgs $ \(BidArgs vidId bidPrice) -> do
     logInfo  @String $ "Bid on vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
     let bidValue = Ada.lovelaceValueOf bidPrice
     void $ SM.runStep (client (vidIdFromString vidId))  Bid{newBid = bidValue, newBidder = pkh}
+    maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
+    case maybeState of
+      Just (onChainState, _)  ->
+        do
+          let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+          logInfo @String $ "VidBid contract found in state: " ++ show valueInState
+          tell $ vidbidStateOut $ valueInState
+          pure (Just (vidbidStateOut $ valueInState))
+      Nothing -> do
+        logError @String $ "Couldn't find state of contract."
+        pure Nothing
 
 data PaydayArgs = PaydayArgs
     { vidId     :: String
@@ -378,12 +426,22 @@ data PaydayArgs = PaydayArgs
 
 payday :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 payday = endpoint @"payday" @PaydayArgs $ \(PaydayArgs vidId adaValue) -> do
     logInfo  @String $ "PayDay!!! for vidId: " ++ vidId
     let paydayValue = Ada.lovelaceValueOf adaValue
     void $ SM.runStep (client (vidIdFromString vidId)) Payday{paydayValue = paydayValue}
-
+    maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
+    case maybeState of
+      Just (onChainState, _)  ->
+        do
+          let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+          logInfo @String $ "VidBid contract found in state: " ++ show valueInState
+          tell $ vidbidStateOut $ valueInState
+          pure (Just (vidbidStateOut $ valueInState))
+      Nothing -> do
+        logError @String $ "Couldn't find state of contract."
+        pure Nothing
 
 data GrabArgs = GrabArgs
     { vidId     :: String
@@ -393,12 +451,22 @@ data GrabArgs = GrabArgs
 
 grab :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 grab = endpoint @"grab" @GrabArgs $ \(GrabArgs vidId) -> do
     logInfo  @String $ "Grabbing fees of vidId: " ++ vidId
     pkh         <- Contract.ownPubKeyHash
     void $ SM.runStep (client (vidIdFromString vidId)) Grab{ownerPkh = pkh}
-
+    maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
+    case maybeState of
+      Just (onChainState, _)  ->
+        do
+          let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+          logInfo @String $ "VidBid contract found in state: " ++ show valueInState
+          tell $ vidbidStateOut $ valueInState
+          pure (Just (vidbidStateOut $ valueInState))
+      Nothing -> do
+        logError @String $ "Couldn't find state of contract."
+        pure Nothing
 
 data DestroyArgs = DestroyArgs
     { vidId     :: String
@@ -408,11 +476,21 @@ data DestroyArgs = DestroyArgs
 
 destroy :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 destroy = endpoint @"destroy" @DestroyArgs $ \(DestroyArgs vidId) -> do
     logInfo  @String $ "Destroy instance for vidId: " ++ vidId
     void $ SM.runStep (client (vidIdFromString vidId)) Destroy
-
+    maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
+    case maybeState of
+      Just (onChainState, _)  ->
+        do
+          let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
+          logInfo @String $ "VidBid contract found in state: " ++ show valueInState
+          tell $ vidbidStateOut $ valueInState
+          pure (Just (vidbidStateOut $ valueInState))
+      Nothing -> do
+        logError @String $ "Couldn't find state of contract."
+        pure Nothing
 
 data LookupArgs = LookupArgs
     { vidId     :: String
@@ -422,7 +500,7 @@ data LookupArgs = LookupArgs
 
 lookup :: ( AsContractError e
             , AsSMContractError e
-            ) => Promise () VidBIdStateMachineSchema e ()
+            ) => Promise VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 lookup = endpoint @"lookup" @LookupArgs $ \(LookupArgs vidId) -> do
   logInfo  @String $ "Fetching contract state for vidId: " ++ vidId
   maybeState <- SM.getOnChainState (client (vidIdFromString vidId))
@@ -431,7 +509,11 @@ lookup = endpoint @"lookup" @LookupArgs $ \(LookupArgs vidId) -> do
       do
         let OnChainState{ocsTxOut=TypedScriptTxOut{tyTxOutData=valueInState}} = onChainState
         logInfo @String $ "VidBid contract found in state: " ++ show valueInState
-    Nothing -> logError @String $ "Couldn't find state of contract."
+        tell $ vidbidStateOut $ valueInState
+        pure (Just (vidbidStateOut $ valueInState))
+    Nothing -> do
+      logError @String $ "Couldn't find state of contract."
+      pure Nothing
 
 -- | The schema of the contract. It consists of the two endpoints @"lock"@
 --   and @"guess"@ with their respective argument types.
@@ -447,7 +529,7 @@ type VidBIdStateMachineSchema =
 
 contract :: ( AsContractError e
                  , AsSMContractError e
-                 ) => Contract () VidBIdStateMachineSchema e ()
+                 ) => Contract VidBidOutput VidBIdStateMachineSchema e (Maybe VidBidOutput)
 contract = do
     selectList [init, mintToken, lookup, open, bid, payday, grab, destroy] >> contract
 
