@@ -7,3 +7,4 @@ metadata:
 data:
   APP_VERSION: {{ .Chart.Version }}
   ENVIRONMENT: {{ .Values.environment }}
+  NETWORK: {{ .Values.network }}

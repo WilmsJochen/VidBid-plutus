@@ -1,0 +1,98 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  creationTimestamp: null
+  name: {{.Release.Name}}-{{.Chart.Name}}-{{.Values.network}}
+  labels:
+    network: {{.Values.network}}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app: {{ .Chart.Name }}
+  template:
+    metadata:
+      labels:
+        draft: {{ default "draft-app" .Values.draft }}
+        app: {{ .Chart.Name }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+{{- if .Values.podAnnotations }}
+{{ toYaml .Values.podAnnotations | indent 8 }}
+{{- end }}
+    spec:
+      terminationGracePeriodSeconds: 10
+      containers:
+      - image: inputoutput/cardano-node:{{.Values.node.imageTag}}
+        name: cardano-node
+        resources:
+{{ toYaml .Values.node.resources | indent 12 }}
+        envFrom:
+          - configMapRef:
+              name: {{ .Values.configMap.name }}
+        volumeMounts:
+        - mountPath: /data/
+          name: cardano-node-db-claim
+        - mountPath: /ipc/
+          name: cardano-node-ipc-claim
+      - image: inputoutput/cardano-wallet:{{.Values.wallet.imageTag}}
+        name: cardano-wallet
+        resources:
+{{ toYaml .Values.wallet.resources | indent 12 }}
+        command: ["bash -c  ([[ $$NETWORK == \"mainnet\" ]] && $$CMD --mainnet) || ($$CMD --testnet /config/${NETWORK}/genesis-byron.json)"]
+        env:
+          - name: CMD
+            value: "cardano-wallet serve --node-socket /ipc/node.socket --database /wallet-db --listen-address 0.0.0.0"
+        envFrom:
+          - configMapRef:
+              name: {{ .Values.configMap.name }}
+        volumeMounts:
+        - mountPath: /wallet-db
+          name: cardano-wallet-db-claim
+        - mountPath: /ipc
+          name: cardano-node-ipc-claim
+      volumes:
+      - name: cardano-node-db-claim
+        persistentVolumeClaim:
+          claimName: cardano-node-db-claim
+      - name: cardano-node-ipc-claim
+        persistentVolumeClaim:
+          claimName: cardano-node-ipc-claim
+      - name: cardano-wallet-db-claim
+        persistentVolumeClaim:
+          claimName: cardano-wallet-db-claim
+      - name: {{.Release.Name}}-cardano-postgres-secrets
+        secret:
+          items:
+          - key: postgres_password
+            path: postgres_password
+          - key: postgres_user
+            path: postgres_user
+          - key: postgres_db
+            path: postgres_db
+          secretName: {{.Release.Name}}-cardano-postgres-secrets
+  volumeClaimTemplates:
+    - metadata:
+        name: cardano-node-db-claim
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{.Values.node.dbStorageClass}}
+        resources:
+          requests:
+            storage: {{.Values.node.dbStorage}}
+    - metadata:
+        name: cardano-node-ipc-claim
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{.Values.node.ipcStorageClass}}
+        resources:
+          requests:
+            storage: {{.Values.node.ipcStorage}}
+    - metadata:
+        name: cardano-wallet-db-claim
+      spec:
+        accessModes: [ "ReadWriteOnce" ]
+        storageClassName: {{.Values.wallet.dbStorageClass}}
+        resources:
+          requests:
+            storage: {{.Values.wallet.dbStorage}}
