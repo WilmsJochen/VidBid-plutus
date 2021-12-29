@@ -24,7 +24,7 @@ maintainer:         jochen.wilms@desyco.com
 flag defer-plugin-errors
     description:
         Defer errors from the plugin, useful for things like Haddock that can't handle it.
-    default: False
+    default: True
     manual: True
 
 common lang
@@ -101,3 +101,4 @@ executable plutus-starter-pab
     freer-extras -any,
     plutus-ledger -any,
     openapi3 -any,
+    purescript-bridge,
