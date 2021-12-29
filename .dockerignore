@@ -1,0 +1,10 @@
+.idea
+,github
+.devcontainer
+chain-index-testnet-db
+charts
+dist-newstyle
+node-ipc
+node-testnet-db
+wallet-testnet-db
+postman

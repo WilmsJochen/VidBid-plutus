@@ -1,0 +1,90 @@
+#name: Release
+#on:
+#  push:
+#    branches:
+#      - main
+#env:
+#  DOCKER_REPO: desyco
+#  GKE_CLUSTER: vidbid-cluster    # Add your cluster name here.
+#  GKE_ZONE: europe-west1   # Add your cluster zone here.
+#jobs:
+#  build:
+#    name: Release Docker image
+#    runs-on: ubuntu-latest
+#    outputs:
+#      VERSION: ${{ steps.bump_version.outputs.new_tag }}
+#      APP_NAME: ${{ steps.repository_name.outputs.value }}
+#    steps:
+#      - id: repository_name
+#        run: echo "::set-output name=value::$(echo '${{ github.repository }}' | awk -F '/' '{print $2}')"
+#      - uses: actions/checkout@v2
+#      - name: Bump version and push tag
+#        id: bump_version
+#        uses: anothrNick/github-tag-action@1.36.0
+#        env:
+#          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+#          WITH_V: false
+#          DEFAULT_BUMP: patch
+#      - uses: actions/setup-node@v2.2.0
+#        with:
+#          node-version: '14'
+#      - name: Install yarn
+#        run: npm -g install yarn
+#      - name: Get yarn cache directory path
+#        id: yarn-cache-dir-path
+#        run: echo "::set-output name=dir::$(yarn cache dir)"
+#      - uses: actions/cache@v2
+#        id: yarn-cache # use this to check for `cache-hit` (`steps.yarn-cache.outputs.cache-hit != 'true'`)
+#        with:
+#          path: ${{ steps.yarn-cache-dir-path.outputs.dir }}
+#          key: ${{ runner.os }}-yarn-${{ hashFiles('**/yarn.lock') }}
+#          restore-keys: |
+#            ${{ runner.os }}-yarn-
+#      - run: yarn install
+#      - name: Build ui
+#        run: CI=false yarn run build
+#      - name: Setup Docker buildx
+#        uses: docker/setup-buildx-action@v1.6.0
+#        with:
+#          driver: docker
+#      - name: Logging to docker registry
+#        run: docker login -u desyco -p ${{ secrets.DOCKER_HUB_TOKEN }}
+#      - name: build docker image
+#        run: docker build --tag desyco/vidbid-plutus:${{ steps.bump_version.outputs.new_tag }} .
+#      - name: push docker image
+#        run: docker push desyco/vidbid-plutus:${{ steps.bump_version.outputs.new_tag }}
+#  deploy:
+#    name: Deploy to gke
+#    runs-on: ubuntu-latest
+#    needs: [build]
+#    env:
+#      DIR: ./charts/vidbid-plutus
+#      NAMESPACE: staging
+#    steps:
+#      - uses: actions/checkout@v2
+#      - uses: azure/setup-helm@v1
+#        id: install-helm
+#      # Setup gcloud CLI
+#      - uses: google-github-actions/setup-gcloud@94337306dda8180d967a56932ceb4ddcf01edae7
+#        with:
+#          service_account_key: ${{ secrets.GKE_SA_KEY }}
+#          project_id: ${{ secrets.GKE_PROJECT }}
+#      # Get the GKE credentials so we can deploy to the cluster
+#      - uses: google-github-actions/get-gke-credentials@fb08709ba27618c31c09e014e1d8364b02e5042e
+#        with:
+#          cluster_name: ${{ env.GKE_CLUSTER }}
+#          location: ${{ env.GKE_ZONE }}
+#          credentials: ${{ secrets.GKE_SA_KEY }}
+#      - name: Update dependencies
+#        run: helm dependency update ${{ env.DIR }}
+#      - name: Deploy FE
+#        timeout-minutes: 5
+#        run: |
+#          helm upgrade  \
+#            --create-namespace \
+#            --namespace ${{env.NAMESPACE }} \
+#            --install \
+#            --set image.tag=${{ needs.build.outputs.VERSION }} \
+#            --cleanup-on-fail \
+#            --wait --timeout 3m \
+#            vidbid-plutus ${{ env.DIR }}
