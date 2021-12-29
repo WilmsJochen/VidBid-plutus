@@ -60,6 +60,7 @@ library
       plutus-tx-plugin,
       plutus-tx,
       plutus-ledger,
+      plutus-ledger-constraints,
       text,
       semigroups -any,
     hs-source-dirs: src examples/src

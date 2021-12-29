@@ -18,7 +18,7 @@ walletServerConfig:
 
 nodeServerConfig:
   mscBaseUrl: "localhost"
-  mscSocketPath: /home/cardano/node/node.socket
+  mscSocketPath: /home/desyco/projects/cardano/VidBid-plutus/node-ipc/node.socket
   mscKeptBlocks: 100
   mscNetworkId: "1097911063" # Testnet network ID (main net = empty string)
   mscSlotConfig:
